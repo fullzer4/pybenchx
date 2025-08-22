@@ -1,0 +1,44 @@
+[build-system]
+requires = ["uv_build>=0.8.13,<0.9.0"]
+build-backend = "uv_build"
+
+[project]
+name = "pybenchx"
+version = "1.0.0"
+description = "A tiny, precise microbenchmarking framework for Python"
+readme = "README.md"
+requires-python = ">=3.10"
+
+license = "MIT"
+license-files = ["LICEN[CS]E*", "COPYING*"]
+
+authors = [{ name = "Seu Nome", email = "vc@example.com" }]
+keywords = ["benchmark", "microbenchmark", "performance", "timeit", "deno"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Testing",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/fullzer4/pybenchx"
+Repository = "https://github.com/fullzer4/pybenchx"
+Issues = "https://github.com/fullzer4/pybenchx/issues"
+
+[project.scripts]
+pybench = "pybench.cli:main"
+pyb = "pybench.cli:main"
+
+[tool.uv.build-backend]
+module-name = "pybench"
+module-root = ""

@@ -19,7 +19,9 @@ pybench examples/ [-k keyword] [-P key=value ...]
 - Pretty table: aligned columns, percentiles, iter/s, min…max, group headers, baseline and speedup vs. base.
 - TTY-aware colors: `--no-color` for plain environments.
 
-## 📦 Install
+## 🚀 Quickstart
+
+### 📦 Install
 
 - pip
   ```bash
@@ -30,7 +32,26 @@ pybench examples/ [-k keyword] [-P key=value ...]
   uv pip install pybenchx
   ```
 
-## 🚀 Quickstart
+### 🧪 Example benchmark
+
+See `examples/strings_bench.py` for both styles:
+
+```python
+from pybench import bench, Bench, BenchContext
+
+@bench(name="join", n=1000, repeat=10)
+def join(sep: str = ","):
+    sep.join(str(i) for i in range(100))
+
+suite = Bench("strings")
+
+@suite.bench(name="join-baseline", baseline=True)
+def join_baseline(b: BenchContext):
+    s = ",".join(str(i) for i in range(50))
+    b.start(); _ = ",".join([s] * 5); b.end()
+```
+
+### 🏎️ Running
 
 - Run all examples
   ```bash
@@ -45,7 +66,7 @@ pybench examples/ [-k keyword] [-P key=value ...]
   pybench examples/ -P repeat=5 -P n=10000
   ```
 
-## 🎛️ CLI options that matter
+### 🎛️ CLI options that matter
 
 - Disable color
   ```bash
@@ -67,26 +88,7 @@ pybench examples/ [-k keyword] [-P key=value ...]
   pybench examples/ --profile smoke     # no calibration, repeat=3
   ```
 
-## 🧪 Example benchmark
-
-See `examples/strings_bench.py` for both styles:
-
-```python
-from pybench import bench, Bench, BenchContext
-
-@bench(name="join", n=1000, repeat=10)
-def join(sep: str = ","):
-    sep.join(str(i) for i in range(100))
-
-suite = Bench("strings")
-
-@suite.bench(name="join-baseline", baseline=True)
-def join_baseline(b: BenchContext):
-    s = ",".join(str(i) for i in range(50))
-    b.start(); _ = ",".join([s] * 5); b.end()
-```
-
-## 📊 Output
+### 📊 Output
 
 Header includes CPU, Python, perf_counter clock info, total time, and mode. Table shows speed vs baseline with percent:
 

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   nix:
-    name: Nix devshell + Cachix
+    name: Build & Test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

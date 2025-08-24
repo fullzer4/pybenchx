@@ -1,4 +1,4 @@
-name: Release
+name: Release (Nix + Cachix)
 
 on:
   push:
@@ -18,33 +18,44 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Install Nix (Determinate)
+        uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Install uv
+      - name: Use & (if token) push to Cachix (pybenchx)
+        uses: cachix/cachix-action@v16
+        with:
+          name: pybenchx
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build artifacts (uv) inside devShell py312
+        run: nix develop .#py312 -c uv build
+
+      - name: Verify built version matches tag
+        shell: bash
         run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          TAG="${GITHUB_REF_NAME}"      # e.g. v1.2.3
+          VERSION="${TAG#v}"            # 1.2.3
+          echo "Tag: $TAG -> Version: $VERSION"
+          ls -la dist/
 
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/uv
-          key: ${{ runner.os }}-uv-publish-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-publish-
-            ${{ runner.os }}-uv-
+          shopt -s nullglob
+          WHEELS=(dist/pybenchx-${VERSION}-*.whl)
+          SDISTS=(dist/pybenchx-${VERSION}.tar.gz dist/pybenchx-${VERSION}-*.tar.gz)
 
-      - name: Build artifacts
-        run: uv build
+          if [ ${#WHEELS[@]} -eq 0 ]; then
+            echo "::error::Wheel com versão ${VERSION} não encontrado em dist/"
+            exit 1
+          fi
+          if [ ${#SDISTS[@]} -eq 0 ]; then
+            echo "::error::sdist com versão ${VERSION} não encontrado em dist/"
+            exit 1
+          fi
+          echo "OK: artefatos batem com a versão do tag."
 
-      - name: Publish to PyPI
+      - name: Publish to PyPI (uv)
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv publish --token "$PYPI_TOKEN"
+        run: nix develop .#py312 -c uv publish --token "$PYPI_TOKEN"
 
       - name: Attach artifacts to GitHub Release
         uses: softprops/action-gh-release@v2

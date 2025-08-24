@@ -1,18 +1,15 @@
 [build-system]
-requires = ["uv_build>=0.8.13,<0.9.0"]
-build-backend = "uv_build"
+requires = ["hatchling>=1.26.0", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
 
 [project]
 name = "pybenchx"
-version = "1.0.0"
+dynamic = ["version"]
 description = "A tiny, precise microbenchmarking framework for Python"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
-
-license = "MIT"
-license-files = ["LICEN[CS]E*", "COPYING*"]
-
-authors = [{ name = "Seu Nome", email = "vc@example.com" }]
+license = { text = "MIT" }
+authors = [{ name = "fullzer4", email = "gabrielpelizzaro@gmail.com" }]
 keywords = ["benchmark", "microbenchmark", "performance", "timeit", "deno"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -20,7 +17,6 @@ classifiers = [
   "Topic :: Software Development :: Testing",
   "Environment :: Console",
   "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -39,6 +35,12 @@ Issues = "https://github.com/fullzer4/pybenchx/issues"
 pybench = "pybench.cli:main"
 pyb = "pybench.cli:main"
 
-[tool.uv.build-backend]
-module-name = "pybench"
-module-root = ""
+[tool.hatch.build.targets.wheel]
+packages = ["pybench"]
+
+[tool.hatch.build.targets.sdist]
+include = ["pybench", "README.md", "LICENSE", "examples"]
+
+[tool.hatch.version]
+source = "vcs"
+tag-pattern = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"

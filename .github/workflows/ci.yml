@@ -1,4 +1,4 @@
-name: CI (Nix only)
+name: CI
 
 on:
   push:
@@ -30,10 +30,7 @@ jobs:
       - name: Install Nix (Determinate)
         uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Enable Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@main
-
-      - name: Use & push to Cachix (pybenchx)
+      - name: Use & (if token) push to Cachix (pybenchx)
         uses: cachix/cachix-action@v16
         with:
           name: pybenchx
@@ -47,10 +44,3 @@ jobs:
 
       - name: Test with devshell ${{ matrix.shell }}
         run: nix develop .#${{ matrix.shell }} -c uv run -m pytest -q
-
-      - name: Upload dist
-        if: ${{ matrix.shell == 'py312' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ matrix.shell }}
-          path: dist/*

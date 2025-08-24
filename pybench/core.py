@@ -103,17 +103,17 @@ class BenchContext:
     _t0: int = field(default=0, init=False)
     _accum: int = field(default=0, init=False)
 
-    def start(self, _pc=PerfCounter) -> None:
+    def start(self) -> None:
         if self._running:
             # Nested starts are ignored to avoid double count
             return
         self._running = True
-        self._t0 = _pc()
+        self._t0 = PerfCounter()
 
-    def end(self, _pc=PerfCounter) -> None:
+    def end(self) -> None:
         if not self._running:
             return
-        self._accum += _pc() - self._t0
+        self._accum += PerfCounter() - self._t0
         self._running = False
 
     # Internal API used by runner
@@ -565,6 +565,12 @@ def _speedups_by_group(results: List[Result]) -> Dict[int, float]:
         for r in items:
             if r is base_r:
                 continue
+            # Mark ≈ same when relative difference <= 1%
+            if base_mean > 0 and r.mean > 0:
+                pct_diff = abs(r.mean - base_mean) / base_mean
+                if pct_diff <= 0.01:
+                    speedups[id(r)] = 1.0  # sentinel for ≈ same
+                    continue
             speed = (base_mean / r.mean) if r.mean and base_mean else float("nan")
             speedups[id(r)] = speed
     return speedups
@@ -647,16 +653,15 @@ def format_table(
                 s = speedups[sid]
                 if math.isnan(s):
                     vs = "baseline"
+                elif s == 1.0:
+                    vs = "≈ same"
                 elif s > 0:
-                    # Treat near-equal within 1% as same
-                    if abs(s - 1.0) < 0.01:
-                        vs = "≈ same"
+                    # Treat near-equal within 1% as same (handled above)
+                    pct = abs(s - 1.0) * 100.0
+                    if s > 1.0:
+                        vs = f"{s:.2f}× faster ({pct:.1f}%)"
                     else:
-                        pct = abs(s - 1.0) * 100.0
-                        if s > 1.0:
-                            vs = f"{s:.2f}× faster ({pct:.1f}%)"
-                        else:
-                            vs = f"{(1/s):.2f}× slower ({pct:.1f}%)"
+                        vs = f"{(1/s):.2f}× slower ({pct:.1f}%)"
             name = r.name + ("  ★" if r.baseline else "")
             cells = [
                 name,

@@ -26,6 +26,11 @@ classifiers = [
 ]
 dependencies = []
 
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]
+
 [project.urls]
 Homepage = "https://github.com/fullzer4/pybenchx"
 Repository = "https://github.com/fullzer4/pybenchx"

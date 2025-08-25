@@ -26,12 +26,22 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Clean install
+        run: |
+          rm -rf node_modules
+          npm ci || npm install
         working-directory: docs
 
       - name: Build
         run: npm run build
+        working-directory: docs
+
+      - name: List build output
+        if: always()
+        run: |
+          ls -lah
+          echo "---"
+          ls -lah dist || true
         working-directory: docs
 
       - name: Setup Pages

@@ -4,9 +4,7 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
   site: 'https://fullzer4.github.io/pybenchx',
   base: '/pybenchx',
-  experimental: {
-    contentLayer: true
-  },
+  contentLayer: true,
   integrations: [
     starlight({
       title: 'PyBenchx',

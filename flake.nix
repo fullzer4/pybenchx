@@ -104,7 +104,7 @@
           };
 
           docs = pkgs.mkShell {
-            packages = [ pkgs.nodejs_20 pkgs.ripgrep ];
+            packages = [ pkgs.nodejs_20 pkgs.ripgrep pkgs.xsel ];
             shellHook = ''
               echo ">> docs devshell — Node: $(node -v), npm: $(npm -v)"
               echo "Run: cd docs && npm install && npm run dev"

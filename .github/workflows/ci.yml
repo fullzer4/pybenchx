@@ -1,67 +1,39 @@
-name: CI
+name: Deploy Docs
 
 on:
   push:
     branches: [ main ]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+  pages: write
   id-token: write
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
-  nix:
-    name: Build & Test
+  build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { shell: py37,  use_uv: false }
-          - { shell: py38,  use_uv: true  }
-          - { shell: py39,  use_uv: true  }
-          - { shell: py310, use_uv: true  }
-          - { shell: py311, use_uv: true  }
-          - { shell: py312, use_uv: true  }
-          - { shell: py313, use_uv: true  }
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Build with Astro
+        uses: withastro/action@v4
         with:
-          fetch-depth: 0
+          path: docs
+          node-version: 20
+          package-manager: npm
 
-      - name: Install Nix (Determinate)
-        uses: DeterminateSystems/nix-installer-action@main
-
-      - name: Use & (if token) push to Cachix (pybenchx)
-        uses: cachix/cachix-action@v16
-        with:
-          name: pybenchx
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      - name: Flake check
-        run: nix flake check
-
-      - name: Show Python version (${{ matrix.shell }})
-        run: nix develop .#${{ matrix.shell }} -c python -V
-
-      - name: Build with uv (${{ matrix.shell }})
-        if: ${{ matrix.use_uv }}
-        run: nix develop .#${{ matrix.shell }} -c uv build
-
-      - name: Build (skipped for py37)
-        if: ${{ !matrix.use_uv }}
-        run: |
-          echo "Skipping wheel build on py37 (no uv); proceeding to tests."
-
-      - name: Test with uv (${{ matrix.shell }})
-        if: ${{ matrix.use_uv }}
-        run: nix develop .#${{ matrix.shell }} -c uv run -m pytest -q
-
-      - name: Test (${{ matrix.shell }})
-        if: ${{ !matrix.use_uv }}
-        run: nix develop .#${{ matrix.shell }} -c pytest -q
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

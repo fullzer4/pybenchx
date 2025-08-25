@@ -35,7 +35,7 @@ classifiers = [
 ]
 dependencies = []
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "pytest>=7.4,<8 ; python_version < '3.8'",
   "pytest>=8      ; python_version >= '3.8'",

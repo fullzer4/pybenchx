@@ -1,0 +1,62 @@
+---
+title: CLI
+---
+
+# CLI (`pybench` / `pyb`)
+
+The CLI discovers and runs benchmarks defined with `@bench` or `Bench`.
+
+## Basic usage
+
+```bash
+pybench <files|directories> [options]
+# alias
+pyb <...>
+```
+
+- Directories expand to `**/*bench.py`.
+- Color output when TTY (use `--no-color` to disable).
+
+## Options
+
+```text
+-k <word>             # filter by substring in case/file name
+-P k=v                # override params: n, repeat, warmup, group and custom params (repeatable)
+--no-color            # disable ANSI colors
+--sort [group|time]   # sort by group or by time within the group
+--desc                # descending order
+--budget 300ms        # per-variant budget (calibration). Accepts ns, ms, s
+--max-n 1000000       # cap for calibrated n
+--profile [fast|thorough|smoke]
+--brief               # compact output: benchmark, time(avg), vs base
+```
+
+Profiles:
+- fast: `budget≈150ms`, `repeat=10`
+- thorough: `budget≈1s`, `repeat=30`
+- smoke: no calibration, `repeat=3`, `warmup=0`
+
+## Overrides with -P
+
+Quickly tune without touching code:
+
+```bash
+pybench examples/ -P repeat=5 -P n=10000 -P warmup=0
+pybench examples/ -P group=strings
+pybench examples/ -P sep=":"  # replaces a parameter defined in the case
+```
+
+## Output
+
+- Header: CPU, Python, clock resolution and run summary.
+- Table: mean, iter/s, min…max, p75/p99/p995, baseline and speed vs base.
+
+Brief example (`--brief`):
+
+```text
+benchmark                          time (avg)       vs base
+join                                 13.06 µs              -
+strings/join-baseline  ★            376.07 ns       baseline
+strings/join-basic                  377.90 ns          ≈ same
+strings/concat                       10.62 µs     28.25× slower
+```

@@ -1,0 +1,66 @@
+---
+title: API Reference
+---
+
+# API
+
+## Decorator: `bench(**opts)`
+
+Register a function as a benchmark case.
+
+Key options:
+- name: case name.
+- params: dict of lists to generate variants (cartesian product).
+- args/kwargs: fixed arguments for the case.
+- n: iterations per repeat (default 100).
+- repeat: number of repeats (default 20).
+- warmup: warmup repeats (default 2).
+- group: logical group in the table.
+- baseline: mark as the baseline for speedup calculation.
+
+Functions can be in two modes:
+- "func" mode: `def f(...): ...` — the whole call is timed.
+- "context" mode: first argument is `BenchContext` — you mark the hot region.
+
+Example:
+```python
+from pybench import bench, BenchContext
+
+@bench(name="join")
+def join(sep: str = ","):
+    sep.join(str(i) for i in range(100))
+
+@bench(name="concat", n=1000, repeat=10)
+def concat(b: BenchContext):
+    s = ""; b.start()
+    for i in range(100): s += str(i)
+    b.end()
+```
+
+## Class: `Bench(suite_name=None, *, group=None)`
+
+Create a suite; use `suite.bench(...)` as a decorator to group cases and define a baseline.
+
+```python
+from pybench import Bench, BenchContext
+
+suite = Bench("strings")
+
+@suite.bench(name="join-baseline", baseline=True)
+def base(b: BenchContext):
+    ...
+```
+
+## Class: `BenchContext`
+
+- `start()` / `end()`: mark the critical section. The accumulated time between `start` and `end` is measured.
+- Benefit: avoids per-iteration setup noise.
+
+## Results and metrics
+
+Each case yields a `Result` with:
+- `mean`, `median`, `stdev`, `min`, `max`, `p(q)`
+- `per_call_ns`: per-call times (ns)
+- `group` and `baseline`
+
+The table also shows `iter/s` and `vs base` (speedup or "≈ same").

@@ -1,0 +1,47 @@
+---
+title: Overview
+---
+
+# PyBenchx
+
+PyBenchx is a tiny, precise microbenchmarking framework for Python (3.7+).
+
+## Highlights
+
+- Simple API: `@bench(...)` or a suite with `Bench` + `BenchContext`.
+- Auto-discovery via CLI (`pybench <dir>` looks for `**/*bench.py`).
+- Parameterization, warmup, repeats, GC control, and percentiles.
+- Smart per-variant calibration to hit a time budget.
+- Clean table output: avg, min…max, p75/p99/p995, iter/s, and speed vs baseline.
+
+> Install: `pip install pybenchx`
+
+## Quick example
+
+```python
+from pybench import bench, Bench, BenchContext
+
+@bench(name="join", n=1000, repeat=10)
+def join(sep: str = ","):
+    sep.join(str(i) for i in range(100))
+
+suite = Bench("strings")
+
+@suite.bench(name="join-baseline", baseline=True)
+def join_baseline(b: BenchContext):
+    s = ",".join(str(i) for i in range(50))
+    b.start(); _ = ",".join([s] * 5); b.end()
+```
+
+Run it:
+
+```bash
+pybench examples/
+```
+
+## What next?
+
+- Getting Started: installation and first benchmark.
+- CLI: options and profiles.
+- API: `bench`, `Bench`, `BenchContext`, and results.
+- Examples: strings and parameter sweep.

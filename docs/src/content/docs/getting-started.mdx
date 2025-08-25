@@ -1,0 +1,41 @@
+---
+title: Getting Started
+---
+
+## Installation
+
+```bash
+pip install pybenchx
+# or
+uv pip install pybenchx
+```
+
+## Your first benchmark
+
+Create a file `examples/hello_bench.py`:
+
+```python
+from pybench import bench
+
+@bench(name="hello", n=1000, repeat=10)
+def hello():
+    return sum(range(50))
+```
+
+Run it:
+
+```bash
+pybench examples/
+```
+
+Filter by name and tweak parameters at runtime:
+
+```bash
+pybench examples/ -k hello -P repeat=5 -P n=10_000
+```
+
+For stable numbers during development:
+
+```bash
+pybench examples/ --profile fast  # budget≈150ms, repeat=10
+```

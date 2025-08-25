@@ -1,5 +1,10 @@
 # PyBench — fast, precise microbenchmarks for Python
 
+[![CI](https://github.com/fullzer4/pybenchx/actions/workflows/ci.yml/badge.svg)](https://github.com/fullzer4/pybenchx/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/pybenchx?label=PyPI)](https://pypi.org/project/pybenchx/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/pybenchx.svg)](https://pypi.org/project/pybenchx/)
+[![License](https://img.shields.io/github/license/fullzer4/pybenchx.svg)](LICENSE)
+
 Measure small, focused snippets with minimal boilerplate, auto-discovery, smart calibration, and a clean CLI (command: `pybench`).
 
 Run benchmarks with one command:

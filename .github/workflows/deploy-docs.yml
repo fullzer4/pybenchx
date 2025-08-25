@@ -18,31 +18,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Build with Astro
+        uses: withastro/action@v3
         with:
+          path: docs
           node-version: 20
+          package-manager: npm
 
-      - name: Clean install
-        run: |
-          rm -rf node_modules
-          npm ci || npm install
-        working-directory: docs
-
-      - name: Build
-        run: npm run build
-        working-directory: docs
-
-      - name: List build output
-        if: always()
-        run: |
-          ls -lah
-          echo "---"
-          ls -lah dist || true
-        working-directory: docs
+      - name: Add .nojekyll
+        run: touch docs/dist/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -53,11 +39,11 @@ jobs:
           path: docs/dist
 
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

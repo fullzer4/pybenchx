@@ -8,10 +8,9 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "astro": "^4.15.0",
-    "@astrojs/starlight": "^0.25.5"
+    "astro": "^4.16.19",
+    "@astrojs/starlight": "^0.34.0",
+    "@astrojs/mdx": "^3.1.0"
   },
-  "engines": {
-    "node": ">=18"
-  }
+  "engines": { "node": ">=18" }
 }

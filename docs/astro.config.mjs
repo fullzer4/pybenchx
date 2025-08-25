@@ -2,14 +2,19 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://fullzer4.github.io/pybenchx/',
+  site: 'https://fullzer4.github.io/pybenchx',
   base: '/pybenchx',
+  experimental: {
+    contentLayer: true
+  },
   integrations: [
     starlight({
       title: 'PyBenchx',
       tagline: 'Tiny, precise microbenchmarks for Python.',
       description: 'A tiny, precise microbenchmarking framework for Python.',
-      social: { github: 'https://github.com/fullzer4/pybenchx' },
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/fullzer4/pybenchx' }
+      ],
       editLink: {
         baseUrl: 'https://github.com/fullzer4/pybenchx/edit/main/docs/src/content/docs/'
       },

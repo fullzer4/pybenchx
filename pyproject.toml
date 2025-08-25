@@ -1,23 +1,32 @@
 [build-system]
-requires = ["hatchling>=1.26.0", "hatch-vcs>=0.4"]
-build-backend = "hatchling.build"
+requires = [
+  "setuptools>=61",
+  "setuptools-scm[toml]>=7,<8",
+  "wheel"
+]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "pybenchx"
 dynamic = ["version"]
 description = "A tiny, precise microbenchmarking framework for Python"
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.10"
+requires-python = ">=3.7"
 license = { text = "MIT" }
 authors = [{ name = "fullzer4", email = "gabrielpelizzaro@gmail.com" }]
-keywords = ["benchmark", "microbenchmark", "performance", "timeit", "deno"]
+keywords = ["benchmark", "microbenchmark", "performance", "timeit"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Topic :: Software Development :: Testing",
   "Environment :: Console",
   "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -26,9 +35,10 @@ classifiers = [
 ]
 dependencies = []
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
-    "pytest>=8.4.1",
+  "pytest>=7.4,<8 ; python_version < '3.8'",
+  "pytest>=8      ; python_version >= '3.8'",
 ]
 
 [project.urls]
@@ -40,12 +50,15 @@ Issues = "https://github.com/fullzer4/pybenchx/issues"
 pybench = "pybench.cli:main"
 pyb = "pybench.cli:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["pybench"]
+[tool.setuptools]
+include-package-data = true
 
-[tool.hatch.build.targets.sdist]
-include = ["pybench", "README.md", "LICENSE", "examples"]
+[tool.setuptools.packages.find]
+include = ["pybench*"]
+exclude = ["tests*", "docs*"]
 
-[tool.hatch.version]
-source = "vcs"
-tag-pattern = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+[tool.setuptools_scm]
+tag_regex = '^[vV]?(?P<version>\d+(?:\.\d+){2,})$'
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+fallback_version = "0.0.0"

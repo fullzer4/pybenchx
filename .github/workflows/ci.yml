@@ -20,7 +20,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shell: [py310, py311, py312, py313]
+        include:
+          - { shell: py37,  use_uv: false }
+          - { shell: py310, use_uv: true  }
+          - { shell: py311, use_uv: true  }
+          - { shell: py312, use_uv: true  }
+          - { shell: py313, use_uv: true  }
 
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +44,22 @@ jobs:
       - name: Flake check
         run: nix flake check
 
-      - name: Build with devshell ${{ matrix.shell }}
+      - name: Show Python version (${{ matrix.shell }})
+        run: nix develop .#${{ matrix.shell }} -c python -V
+
+      - name: Build with uv (${{ matrix.shell }})
+        if: ${{ matrix.use_uv }}
         run: nix develop .#${{ matrix.shell }} -c uv build
 
-      - name: Test with devshell ${{ matrix.shell }}
+      - name: Build (skipped for py37)
+        if: ${{ !matrix.use_uv }}
+        run: |
+          echo "Skipping wheel build on py37 (no uv); proceeding to tests."
+
+      - name: Test with uv (${{ matrix.shell }})
+        if: ${{ matrix.use_uv }}
         run: nix develop .#${{ matrix.shell }} -c uv run -m pytest -q
+
+      - name: Test (${{ matrix.shell }})
+        if: ${{ !matrix.use_uv }}
+        run: nix develop .#${{ matrix.shell }} -c pytest -q

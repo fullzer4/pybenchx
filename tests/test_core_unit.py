@@ -1,6 +1,5 @@
 import textwrap
 from pathlib import Path
-import pytest
 
 from pybench.core import (
     BenchContext,
@@ -15,25 +14,6 @@ from pybench.core import (
 )
 import pybench.core as core_mod
 import pybench.cli as cli_mod
-
-
-@pytest.fixture(autouse=True)
-def _isolate_global_registry():
-    saved_benches = list(core_mod._GLOBAL_BENCHES)
-    saved_default_cases = list(getattr(core_mod, "DEFAULT_BENCH")._cases)
-    core_mod._GLOBAL_BENCHES.clear()
-    # Keep DEFAULT_BENCH registered so @bench continues to register into a visible suite
-    core_mod._GLOBAL_BENCHES.append(core_mod.DEFAULT_BENCH)
-    # Start from a clean default bench cases list
-    core_mod.DEFAULT_BENCH._cases.clear()
-    try:
-        yield
-    finally:
-        # Restore benches and default bench cases
-        core_mod._GLOBAL_BENCHES.clear()
-        core_mod._GLOBAL_BENCHES.extend(saved_benches)
-        core_mod.DEFAULT_BENCH._cases.clear()
-        core_mod.DEFAULT_BENCH._cases.extend(saved_default_cases)
 
 
 def test_infer_mode_by_annotation_and_name():
@@ -61,7 +41,8 @@ def test_bench_context_start_end_accumulate(monkeypatch):
         t["now"] += 50
         return t["now"]
 
-    monkeypatch.setattr(core_mod, "PerfCounter", fake_pc)
+    # core now uses _pc_ns() as the time source
+    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
 
     b = BenchContext()
     # end without start: no crash, no effect
@@ -136,14 +117,14 @@ def test_detect_used_ctx_true_and_false():
 
 
 def test_run_single_repeat_context_used_ctx(monkeypatch):
-    # Each start/end adds +100 ns due to fake PerfCounter
+    # Each start/end adds +100 ns due to fake clock
     t = {"now": 0}
 
     def fake_pc():
         t["now"] += 100
         return t["now"]
 
-    monkeypatch.setattr(core_mod, "PerfCounter", fake_pc)
+    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
 
     def fn(b: BenchContext):
         b.start(); b.end()
@@ -154,7 +135,7 @@ def test_run_single_repeat_context_used_ctx(monkeypatch):
 
 
 def test_run_single_repeat_context_fallback_loop_time(monkeypatch):
-    # PerfCounter: first call 0, second call n*100
+    # Clock: first call 0, second call n*100
     calls = {"i": 0}
 
     def fake_pc():
@@ -162,7 +143,7 @@ def test_run_single_repeat_context_fallback_loop_time(monkeypatch):
         calls["i"] += 1
         return 0 if i == 0 else 500  # for n=5 => 100 per call
 
-    monkeypatch.setattr(core_mod, "PerfCounter", fake_pc)
+    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
 
     def fn(b: BenchContext):
         pass  # no start/end used
@@ -173,7 +154,7 @@ def test_run_single_repeat_context_fallback_loop_time(monkeypatch):
 
 
 def test_run_single_repeat_func_mode(monkeypatch):
-    # PerfCounter: first call 0, second call n*50
+    # Clock: first call 0, second call n*50
     calls = {"i": 0}
 
     def fake_pc():
@@ -181,7 +162,7 @@ def test_run_single_repeat_func_mode(monkeypatch):
         calls["i"] += 1
         return 0 if i == 0 else 250  # for n=5 => 50 per call
 
-    monkeypatch.setattr(core_mod, "PerfCounter", fake_pc)
+    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
 
     def fn():
         return None
@@ -201,7 +182,7 @@ def test_run_case_with_mocked_calibration(monkeypatch):
         t["now"] += 100
         return t["now"]
 
-    monkeypatch.setattr(core_mod, "PerfCounter", fake_pc)
+    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
 
     def fn(b: BenchContext):
         b.start(); b.end()

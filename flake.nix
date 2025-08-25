@@ -1,6 +1,5 @@
 {
   inputs.nixpkgs.url       = "github:NixOS/nixpkgs/nixos-unstable";
-  # Canais antigos para intérpretes EOL:
   inputs.nixpkgs_py37.url  = "github:NixOS/nixpkgs/nixos-21.11";
   inputs.nixpkgs_py38.url  = "github:NixOS/nixpkgs/nixos-22.11";
   inputs.nixpkgs_py39.url  = "github:NixOS/nixpkgs/nixos-23.11";
@@ -24,7 +23,6 @@
           '';
         };
 
-      # helpers para checar se o attr existe nesses pins
       hasAttr = set: attr: builtins.hasAttr attr set;
 
     in {
@@ -72,7 +70,6 @@
             extras = [ pkgs.uv pkgs.pkg-config pkgs.ripgrep ];
           };
 
-          # 3.9 do nixpkgs 23.11 — mantém uv moderno nos extras
           py39 = if have39 then
             mkShell {
               pkgs   = pkgs;
@@ -84,7 +81,6 @@
             shellHook = "echo '!! python39 not available on ${system} for nixpkgs 23.11'";
           };
 
-          # 3.8 do nixpkgs 22.11 — idem
           py38 = if have38 then
             mkShell {
               pkgs   = pkgs;
@@ -96,7 +92,6 @@
             shellHook = "echo '!! python38 not available on ${system} for nixpkgs 22.11'";
           };
 
-          # 3.7 do nixpkgs 21.11 — sem uv; inclui pip/setuptools/wheel p/ build
           py37 = if have37 then
             mkShell {
               pkgs   = pkgs;
@@ -106,6 +101,14 @@
           else pkgs.mkShell {
             packages  = [ pkgs.pkg-config pkgs.ripgrep ];
             shellHook = "echo '!! python37 not available on ${system} for nixpkgs 21.11'";
+          };
+
+          docs = pkgs.mkShell {
+            packages = [ pkgs.nodejs_20 pkgs.ripgrep ];
+            shellHook = ''
+              echo ">> docs devshell — Node: $(node -v), npm: $(npm -v)"
+              echo "Run: cd docs && npm install && npm run dev"
+            '';
           };
         });
 

@@ -8,19 +8,19 @@ title: API Reference
 
 Register a function as a benchmark case.
 
-Key options:
-- name: case name.
-- params: dict of lists to generate variants (cartesian product).
-- args/kwargs: fixed arguments for the case.
-- n: iterations per repeat (default 100).
-- repeat: number of repeats (default 20).
-- warmup: warmup repeats (default 2).
-- group: logical group in the table.
-- baseline: mark as the baseline for speedup calculation.
+Options:
+- name: case name
+- params: dict[str, list] to generate variants (cartesian product)
+- args/kwargs: fixed positional/keyword arguments
+- n: iterations per repeat (default 100)
+- repeat: number of repeats (default 20)
+- warmup: warmup repeats (default 2)
+- group: table group name
+- baseline: mark case as baseline for its group
 
-Functions can be in two modes:
-- "func" mode: `def f(...): ...` — the whole call is timed.
-- "context" mode: first argument is `BenchContext` — you mark the hot region.
+Modes:
+- function mode: time the whole call
+- context mode: first parameter is `BenchContext`; only the region between `start()` and `end()` is measured
 
 Example:
 ```python
@@ -39,7 +39,7 @@ def concat(b: BenchContext):
 
 ## Class: `Bench(suite_name=None, *, group=None)`
 
-Create a suite; use `suite.bench(...)` as a decorator to group cases and define a baseline.
+Create a suite; use `suite.bench(...)` to group cases and define a baseline.
 
 ```python
 from pybench import Bench, BenchContext
@@ -51,16 +51,34 @@ def base(b: BenchContext):
     ...
 ```
 
+Notes:
+- `group` default is `suite_name` (unless it is "bench"/"default").
+- Use multiple suites to structure a large project.
+
 ## Class: `BenchContext`
 
-- `start()` / `end()`: mark the critical section. The accumulated time between `start` and `end` is measured.
-- Benefit: avoids per-iteration setup noise.
+- `start()` / `end()`: mark the critical section
+- Resets automatically each iteration during measurement
+- Prefer this mode when setup dominates per-iteration cost
 
-## Results and metrics
+## Results
 
 Each case yields a `Result` with:
-- `mean`, `median`, `stdev`, `min`, `max`, `p(q)`
-- `per_call_ns`: per-call times (ns)
-- `group` and `baseline`
+- per_call_ns: list[float] of per-call time (ns)
+- mean, median, stdev, min, max
+- p(q): percentile (linear interpolation)
+- group, baseline flags
 
-The table also shows `iter/s` and `vs base` (speedup or "≈ same").
+The rendered table adds:
+- iter/s: derived from mean
+- vs base: `baseline`, `≈ same` (≤1% diff), `x× faster/slower`
+
+## Parameterization patterns
+
+```python
+@bench(name="op", params={"n": [10, 100], "sep": ["-", ":"]})
+def op(n: int, sep: str):
+    sep.join(str(i) for i in range(n))
+```
+
+You can also keep `params` and override at runtime with `-P sep=":"`.

@@ -4,31 +4,33 @@ title: Overview
 
 # PyBenchx
 
-PyBenchx is a tiny, precise microbenchmarking framework for Python (3.7+).
-
-## Highlights
-
-- Simple API: `@bench(...)` or a suite with `Bench` + `BenchContext`.
-- Auto-discovery via CLI (`pybench <dir>` looks for `**/*bench.py`).
-- Parameterization, warmup, repeats, GC control, and percentiles.
-- Smart per-variant calibration to hit a time budget.
-- Clean table output: avg, min…max, p75/p99/p995, iter/s, and speed vs baseline.
+Tiny, precise microbenchmarks for Python. Minimal boilerplate, smart calibration, and a clean CLI.
 
 > Install: `pip install pybenchx`
 
-## Quick example
+## Why PyBenchx
+
+- Write focused cases quickly (decorator or suite).
+- Let the CLI discover files and calibrate work automatically.
+- Get stable numbers (warmup, repeats, budget-based calibration, GC control).
+- Readable output with percentiles and “vs base”.
+
+## Two ways to write a case
+
+- Function mode: time the whole call.
+- Context mode: pass `BenchContext` as first arg and wrap only the hot region with `start()/end()`.
 
 ```python
 from pybench import bench, Bench, BenchContext
 
-@bench(name="join", n=1000, repeat=10)
+@bench(name="join")  # function mode
 def join(sep: str = ","):
     sep.join(str(i) for i in range(100))
 
 suite = Bench("strings")
 
-@suite.bench(name="join-baseline", baseline=True)
-def join_baseline(b: BenchContext):
+@suite.bench(name="join-baseline", baseline=True)  # context mode
+def base(b: BenchContext):
     s = ",".join(str(i) for i in range(50))
     b.start(); _ = ",".join([s] * 5); b.end()
 ```
@@ -39,9 +41,21 @@ Run it:
 pybench examples/
 ```
 
-## What next?
+## Discovery rules
 
-- Getting Started: installation and first benchmark.
-- CLI: options and profiles.
-- API: `bench`, `Bench`, `BenchContext`, and results.
-- Examples: strings and parameter sweep.
+- Directories expand to `**/*bench.py`.
+- You can pass one or more files and/or directories.
+
+## Baseline and “vs base”
+
+- Mark a case as `baseline=True` (or use a name that contains "baseline/base").
+- Other cases in the same group show speed relative to the baseline.
+- “≈ same” appears when the mean differs ≤ 1%.
+
+## What next
+
+- Getting Started: first benchmark, naming, running.
+- CLI: discovery, options, profiles, overrides.
+- API: `bench`, `Bench`, `BenchContext`.
+- How it works: timing model, calibration, accuracy.
+- Examples & Cookbook: ready-to-run snippets and patterns.

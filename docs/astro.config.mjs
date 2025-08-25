@@ -21,11 +21,12 @@ export default defineConfig({
         { label: 'Overview', link: '/' },
         { label: 'Getting Started', link: '/getting-started' },
         { label: 'CLI', link: '/cli' },
+        { label: 'Behavior & Accuracy', link: '/behavior' },
         {
           label: 'API Reference',
           items: [{ label: 'bench / Bench / BenchContext', link: '/api' }]
         },
-        { label: 'Examples', link: '/examples' },
+        { label: 'Examples & Cookbook', link: '/examples' },
         { label: 'Internals', link: '/internals' },
         { label: 'Contributing', link: '/contributing' }
       ]

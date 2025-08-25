@@ -2,7 +2,7 @@
 title: Getting Started
 ---
 
-## Installation
+## Install
 
 ```bash
 pip install pybenchx
@@ -10,32 +10,71 @@ pip install pybenchx
 uv pip install pybenchx
 ```
 
-## Your first benchmark
+## First benchmark (function mode)
 
-Create a file `examples/hello_bench.py`:
+Create `examples/hello_bench.py`:
 
 ```python
 from pybench import bench
 
-@bench(name="hello", n=1000, repeat=10)
+@bench(name="hello", n=1_000, repeat=10)
 def hello():
     return sum(range(50))
 ```
 
-Run it:
+Run:
 
 ```bash
 pybench examples/
 ```
 
-Filter by name and tweak parameters at runtime:
+Filter and tweak at runtime:
 
 ```bash
 pybench examples/ -k hello -P repeat=5 -P n=10_000
 ```
 
-For stable numbers during development:
+## Isolating the hot path (context mode)
+
+```python
+from pybench import Bench, BenchContext
+
+suite = Bench("math")
+
+@suite.bench(name="baseline", baseline=True, repeat=10)
+def baseline(b: BenchContext):
+    setup = list(range(100))
+    b.start()
+    sum(setup)  # timed
+    b.end()
+```
+
+Why: context mode excludes per-iteration setup from timing, improving signal.
+
+## Discovery and naming
+
+- Directories expand to `**/*bench.py`.
+- Name cases with `name=`. Use `group=` to cluster related cases.
+
+```python
+@suite.bench(name="join-basic", group="strings")
+```
+
+## Baseline and groups
+
+- Set `baseline=True` on one case per group. Others show “vs base”.
+- Without an explicit baseline, a case whose name includes "baseline/base" may be used.
+
+## Profiles you’ll use
 
 ```bash
-pybench examples/ --profile fast  # budget≈150ms, repeat=10
+pybench examples/ --profile fast      # ~150ms per variant, repeat=10
+pybench examples/ --profile thorough  # ~1s per variant, repeat=30
+pybench examples/ --profile smoke     # no calibration, repeat=3
 ```
+
+## Next steps
+
+- Read CLI for options (`--no-color`, `--sort`, `--budget`, `--max-n`).
+- See API for parameterization (`params={...}`) and suites.
+- Explore Examples for common patterns.

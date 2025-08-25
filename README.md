@@ -100,18 +100,18 @@ Header includes CPU, Python, perf_counter clock info, total time, and mode. Tabl
 ```
 (pybench) [fullzer4@archlinux pybenchx]$ pybench examples/
 cpu: x86_64
-runtime: python 3.12.5 (x86_64-linux) | perf_counter: res=1.0e-09s, mono=True
-time: 21.722s | mode: default, budget=0.300s, max-n=1000000, smoke=False
+runtime: python 3.13.5 (x86_64-linux) | perf_counter: res=1.0e-09s, mono=True
+time: 23.378s | mode: default, budget=0.3s, max-n=1000000, smoke=False, sequential
 benchmark                          time (avg)       iter/s              (min … max)          p75          p99         p995      vs base
-join                                 11.72 µs       85.3 K      10.61 µs … 13.64 µs     12.16 µs     13.52 µs     13.58 µs            -
-join_param[n=100,sep='-']            11.94 µs       83.8 K      10.56 µs … 13.61 µs     12.43 µs     13.56 µs     13.59 µs            -
-join_param[n=100,sep=':']            11.55 µs       86.6 K      10.58 µs … 12.33 µs     12.21 µs     12.33 µs     12.33 µs            -
-join_param[n=1000,sep='-']          118.69 µs        8.4 K    108.67 µs … 134.28 µs    121.52 µs    133.57 µs    133.93 µs            -
-join_param[n=1000,sep=':']          121.14 µs        8.3 K    108.99 µs … 157.25 µs    123.28 µs    154.39 µs    155.82 µs            -
+join                                 13.06 µs       76.6 K      13.00 µs … 13.21 µs     13.08 µs     13.20 µs     13.21 µs            -
+join_param[n=100,sep='-']            13.17 µs       75.9 K      12.79 µs … 13.72 µs     13.37 µs     13.70 µs     13.71 µs            -
+join_param[n=100,sep=':']            13.06 µs       76.6 K      12.85 µs … 13.23 µs     13.14 µs     13.23 µs     13.23 µs            -
+join_param[n=1000,sep='-']          131.75 µs        7.6 K    129.32 µs … 134.82 µs    132.23 µs    134.70 µs    134.76 µs            -
+join_param[n=1000,sep=':']          135.62 µs        7.4 K    131.17 µs … 147.50 µs    136.68 µs    146.92 µs    147.21 µs            -
 group: strings                                                                                                                  
-join-baseline  ★                    429.42 ns        2.3 M    380.26 ns … 484.32 ns    452.78 ns    482.04 ns    483.18 ns     baseline
-join-basic                          417.29 ns        2.4 M    383.02 ns … 471.58 ns    428.28 ns    468.33 ns    469.95 ns 1.03× faster (2.9%)
-concat                                8.58 µs      116.6 K        7.88 µs … 9.84 µs      8.84 µs      9.80 µs      9.82 µs 19.97× slower (95.0%)
+join-baseline  ★                    376.07 ns        2.7 M    371.95 ns … 384.09 ns    378.96 ns    383.66 ns    383.87 ns     baseline
+join-basic                          377.90 ns        2.6 M    365.89 ns … 382.65 ns    381.15 ns    382.55 ns    382.60 ns       ≈ same
+concat                               10.62 µs       94.1 K      10.54 µs … 10.71 µs     10.65 µs     10.70 µs     10.71 µs 28.25× slower
 ```
 
 ## 💡 Tips

@@ -22,6 +22,8 @@ jobs:
       matrix:
         include:
           - { shell: py37,  use_uv: false }
+          - { shell: py38,  use_uv: true  }
+          - { shell: py39,  use_uv: true  }
           - { shell: py310, use_uv: true  }
           - { shell: py311, use_uv: true  }
           - { shell: py312, use_uv: true  }

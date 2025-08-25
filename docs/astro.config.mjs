@@ -9,7 +9,7 @@ export default defineConfig({
       title: 'PyBenchx',
       tagline: 'Tiny, precise microbenchmarks for Python.',
       description: 'A tiny, precise microbenchmarking framework for Python.',
-      social: { github: 'fullzer4/pybenchx' },
+      social: { github: 'https://github.com/fullzer4/pybenchx' },
       editLink: {
         baseUrl: 'https://github.com/fullzer4/pybenchx/edit/main/docs/src/content/docs/'
       },

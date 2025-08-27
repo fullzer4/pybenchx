@@ -44,16 +44,18 @@ def discover(paths: Sequence[str]) -> List[Path]:
     for p in paths:
         path = Path(p)
         if path.is_file():
-            files.append(path)
+            files.append(path.resolve())
         elif path.is_dir():
-            files.extend(sorted(path.glob(GLOB)))
+            base = path.resolve()
+            files.extend(sorted(base.glob(GLOB)))
     return files
 
 
 def load_module_from_path(path: Path) -> None:
     """Import a file as a uniquely-named module so decorators can register cases."""
+    path = path.resolve()
     modname = _module_name_for_path(str(path))
-    spec = importlib.util.spec_from_file_location(modname, path)
+    spec = importlib.util.spec_from_file_location(modname, str(path))
     if spec and spec.loader:
         module = importlib.util.module_from_spec(spec)
         sys.modules[modname] = module
@@ -169,9 +171,11 @@ def run(
                 for _vname, vargs, vkwargs in _make_variants(case):
                     if case.mode == "context":
                         ctx = BenchContext()
-                        fn = lambda: case.func(ctx, *vargs, **vkwargs)
+                        def fn():
+                            return case.func(ctx, *vargs, **vkwargs)
                     else:
-                        fn = lambda: case.func(*vargs, **vkwargs)
+                        def fn():
+                            return case.func(*vargs, **vkwargs)
                     try:
                         fn()
                     except Exception:

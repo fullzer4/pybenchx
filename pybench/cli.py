@@ -52,9 +52,15 @@ def discover(paths: Sequence[str]) -> List[Path]:
 
 
 def load_module_from_path(path: Path) -> None:
-    """Import a file as a uniquely-named module so decorators can register cases."""
+    """Import a file as a uniquely-named module so decorators can register cases.
+    Also ensures the module's directory is on sys.path so local imports resolve.
+    """
     path = path.resolve()
     modname = _module_name_for_path(str(path))
+    # Ensure the file's parent directory is importable (e.g., project 'src' layout)
+    module_dir = str(path.parent)
+    if module_dir not in sys.path:
+        sys.path.insert(0, module_dir)
     spec = importlib.util.spec_from_file_location(modname, str(path))
     if spec and spec.loader:
         module = importlib.util.module_from_spec(spec)

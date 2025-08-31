@@ -23,6 +23,7 @@ pybench examples/ [-k keyword] [-P key=value ...]
 - Calibração esperta: por variante para atingir um budget de tempo.
 - Tabela bonita: colunas alinhadas, percentis, iter/s, min…max, baseline e speedup vs. base.
 - Cores sensíveis a TTY: `--no-color` para ambientes plain.
+- Run management: save runs, baselines, compare and export (JSON/Markdown/CSV).
 
 ## 🚀 Quickstart
 
@@ -71,7 +72,7 @@ def join_baseline(b: BenchContext):
   pybench examples/ -P repeat=5 -P n=10000
   ```
 
-### 🎛️ CLI options que importam
+### 🎛️ Key CLI options
 
 - Disable color
   ```bash
@@ -90,6 +91,13 @@ def join_baseline(b: BenchContext):
   ```bash
   pybench examples/ --profile thorough  # ~1s budget, repeat=30
   pybench examples/ --profile smoke     # no calibration, repeat=3 (default)
+  ```
+- Save / Compare / Export
+  ```bash
+  pybench examples/ --save latest
+  pybench examples/ --save-baseline main
+  pybench examples/ --compare main --fail-on mean:7%,p99:12%
+  pybench examples/ --export md:bench.md   # or json:run.json, csv:bench.csv
   ```
 
 ### 📊 Output
@@ -117,4 +125,4 @@ concat                               10.62 µs       94.1 K      10.54 µs … 1
 
 - Use `BenchContext.start()/end()` para isolar a seção crítica e evitar ruído de setup.
 - Prefira `--profile smoke` durante o desenvolvimento; troque para `--profile thorough` antes de publicar números.
-- Para CI ou logs, use `--no-color`.
+- Para logs, use `--no-color`.

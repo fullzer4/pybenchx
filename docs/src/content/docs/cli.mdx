@@ -63,3 +63,40 @@ pybench examples/ --brief
 - Runs and baselines are stored under `.pybenchx/` in your project root.
 - `--compare` prints a simple diff and applies `--fail-on` thresholds.
 - P-values via Mann–Whitney U (approx). `p99` policy uses actual P99 delta.
+
+## Use in PRs and CI
+
+- Generate a Markdown table and paste it into your PR description or a comment:
+
+```bash
+pybench path/ --export md:bench.md
+# paste the contents of bench.md into your PR
+```
+
+- Automate with GitHub Actions (example):
+
+```yaml
+name: Benchmarks
+on:
+  pull_request:
+    branches: [ main ]
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pybenchx
+      - run: pybench examples/ --profile smoke --export md:bench.md
+      - name: Post comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          body=$(printf "#### PyBenchX\n\n%s" "$(cat bench.md)")
+          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            -f body="$body"
+```
+
+Tip: use `--profile smoke` for speed while iterating; switch to `thorough` on publishing runs.

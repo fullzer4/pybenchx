@@ -1,17 +1,13 @@
 ---
-title: PyBenchx
+title: Overview
 ---
 
-Tiny, precise microbenchmarks for Python. Minimal boilerplate, smart calibration, and a clean CLI.
-
-> Install: `pip install pybenchx`
-
-## Why PyBenchx
-
 - Write focused cases quickly (decorator or suite).
-- Let the CLI discover files and calibrate work automatically.
-- Get stable numbers (warmup, repeats, budget-based calibration, GC control).
-- Readable output with percentiles and “vs base”.
+- Default profile is `smoke` (no calibration). Use `thorough` for deeper runs.
+- Clean CLI with discovery, parameterization, and exports.
+- Save runs, compare to baselines, and export JSON/Markdown/CSV.
+
+> pybenchx is a pragmatic microbenchmark tool: fast iteration (smoke profile), precise hot-path timing (context mode), and consistent reports you can diff in CI.
 
 ## Two ways to write a case
 
@@ -57,3 +53,8 @@ pybench examples/
 - API: `bench`, `Bench`, `BenchContext`.
 - How it works: timing model, calibration, accuracy.
 - Examples & Cookbook: ready-to-run snippets and patterns.
+
+## Run management
+
+- Runs and baselines are stored under `.pybenchx/` in your project root.
+- Use `--save`/`--save-baseline` to persist, `--compare` with `--fail-on` to enforce thresholds, and `--export` to generate reports.

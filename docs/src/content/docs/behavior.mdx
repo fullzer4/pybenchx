@@ -1,70 +1,27 @@
 ---
-title: Behavior & Accuracy
+title: Behavior
 ---
 
-Understand what PyBenchx measures and how it keeps numbers stable.
+How pybenchx runs and measures.
 
-## Timing model
+## Profiles
 
-- Clock: `time.perf_counter_ns()` when available (monotonic, high resolution).
-- Units: all internal measurements are in nanoseconds; the table formats them as ns/µs/ms/s.
-- Mean time: values in the table are per-call means (not totals per repeat).
+Profiles control repeat counts and calibration budget.
 
-## Per-variant calibration (n)
+- thorough: ~1s per variant, `repeat=30`
+- smoke (default): no calibration, `repeat=3`, `warmup=0`
 
-- Goal: run each repeat for roughly a time budget (`--budget`, split across repeats).
-- How: `_calibrate_n` grows `n` exponentially until close to the target, then refines with ±20% probes.
-- Cap: `--max-n` bounds the calibrated `n`.
-- Never lower than code-specified `n`: the final `n` for a variant is `max(case.n, calibrated_n)`.
+Tip: use `--profile smoke` while iterating; switch to `--profile thorough` when publishing.
 
-## Repeats and warmup
+## Calibration
 
-- `warmup` executes untimed iterations to warm caches/CPU.
-- `repeat` controls how many per-call means are collected; more repeats lower variance.
-- Profiles:
-  - fast: ~150ms per variant, `repeat=10`
-  - thorough: ~1s per variant, `repeat=30`
-  - smoke: no calibration, `repeat=3`, `warmup=0`
+- Calibration grows `n` to hit a target budget per variant (split across repeats).
+- In context mode, if `BenchContext` is actually used, only the hot section is measured.
 
-## Garbage collector
+## Accuracy & robustness
 
-- Before running: force a collection; CLI may call `gc.freeze()` when present.
-- During runs: GC is disabled in `run_case` to reduce interruptions; re-enabled at the end.
-
-## Context mode detection
-
-- If your function’s first parameter is `BenchContext` (or named `b/_b/ctx/context` or annotated with `BenchContext`), it runs in “context” mode.
-- Context mode measures only the time between `start()` and `end()` on each iteration; you can do setup before/after without polluting timings.
-- If the function doesn’t actually call `start()/end()`, PyBenchx falls back to timing the whole call (like function mode).
-- Tip: avoid using instance methods for context mode because the first parameter would be `self`; prefer free functions where the first parameter can be `BenchContext`.
-
-## What counts as time
-
-- Function mode: everything inside the function call.
-- Context mode: only the accumulated deltas between `start()` and `end()`. Multiple pairs per iteration are allowed; nested calls are ignored—only the elapsed sums.
-
-## Errors and robustness
-
-- If calibration or warmup raises, the CLI catches and continues where reasonable; the variant may run with the code-specified `n`.
-- Discovery/import errors for a file stop that file’s cases from loading.
-
-## Table math
-
-- Percentiles: linear interpolation on sorted per-call means.
-- iter/s: computed as `1e9 / mean_ns` with K/M suffixes.
-- vs base:
-  - Choose baseline by `baseline=True` or by name heuristic (contains “baseline”/“base”).
-  - “≈ same” appears when the relative mean difference is ≤ 1%.
-
-## Sorting, color, and header
-
-- Sorting: `--sort group|time` within groups; `--desc` to invert.
-- Color: enabled only on TTY by default; disable with `--no-color`.
-- Header shows CPU, Python, clock resolution, total runtime, and the active profile/mode.
-
-## Recommendations
-
-- Use context mode to isolate hot code from setup.
-- Use `--profile fast` while iterating; `--profile thorough` when publishing.
-- Keep variants comparable within the same `group` and define a clear baseline.
-- Pin CPU frequency/turbo and run on quiet machines when seeking highly stable numbers.
+- Monotonic high-resolution clock (`perf_counter` / `_ns`).
+- GC is collected and may be disabled during measurement for stability.
+- Warmup runs help steady state.
+- Percentiles use linear interpolation.
+- Colors only on TTY; `--no-color` turns them off.

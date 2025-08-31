@@ -1,109 +1,67 @@
 ---
-title: Examples & Cookbook
+title: Examples
 ---
 
-Ready-to-run snippets you can drop into `examples/*.py`.
+A few patterns to get you started.
 
-## Functional style (decorators)
+## Simple function benchmark
 
 ```python
-from pybench import bench, BenchContext
+from pybench import bench
 
-@bench(name="join", n=1000, repeat=10)
-def join(sep: str = ","):
-    sep.join(str(i) for i in range(100))
-
-@bench(name="concat_ctx", n=1_000, repeat=10)
-def concat_ctx(b: BenchContext):
-    pieces = [str(i) for i in range(200)]
-    b.start(); s = ""
-    for p in pieces: s += p
-    b.end()
+@bench(name="sum-small", n=1000, repeat=10)
+def sum_small():
+    return sum(range(100))
 ```
 
-Run and filter:
-
-```bash
-pybench examples/ -k join
-```
-
-## Suite style (grouping + baseline)
+## Context mode to isolate hot path
 
 ```python
 from pybench import Bench, BenchContext
 
 suite = Bench("strings")
 
-@suite.bench(name="baseline", baseline=True, n=1_000, repeat=10)
-def baseline(b: BenchContext):
+@suite.bench(name="join-baseline", baseline=True)
+def base(b: BenchContext):
     s = ",".join(str(i) for i in range(50))
     b.start(); _ = ",".join([s] * 5); b.end()
-
-@suite.bench(name="join-basic", n=1_000, repeat=10)
-def join_basic(b: BenchContext):
-    s = ",".join(str(i) for i in range(50))
-    b.start(); _ = ",".join([s] * 5); b.end()
-
-@suite.bench(name="concat", n=1_000, repeat=10)
-def concat(b: BenchContext):
-    pieces = [str(i) for i in range(200)]
-    b.start(); s = ""
-    for p in pieces: s += p
-    b.end()
 ```
 
-## Parameter sweeps
+## Parameterized cases
 
 ```python
 from pybench import bench
 
-@bench(name="join_param", params={"n": [100, 1000], "sep": ["-", ":"]}, repeat=10)
-def join_param(n: int, sep: str = ","):
+@bench(name="join_param", params={"n": [100, 1000], "sep": ["-", ":"]})
+def join_param(n: int, sep: str):
     sep.join(str(i) for i in range(n))
 ```
 
-Override at runtime:
+## Running
 
 ```bash
-pybench examples/ -k join_param -P sep=":" -P n=5000
+pybench examples/ --profile smoke     # default
+pybench examples/ --profile thorough  # heavier runs
 ```
 
-## Micro-cost baselines
-
-```python
-from pybench import bench, BenchContext
-
-@bench(name="noop", baseline=True, n=1, repeat=20)
-def noop(b: BenchContext):
-    b.start(); b.end()
-
-@bench(name="call_overhead", n=1, repeat=20)
-def call_overhead(b: BenchContext):
-    b.start(); (lambda: None)(); b.end()
-```
-
-## Per-iteration setup vs hot path
-
-```python
-from pybench import bench, BenchContext
-
-DATA = list(range(1000))  # expensive to build repeatedly
-
-@bench(name="sum_slow")
-def sum_slow():
-    data = list(range(1000))  # setup noise included in timing
-    sum(data)
-
-@bench(name="sum_hot")
-def sum_hot(b: BenchContext):
-    data = DATA
-    b.start(); sum(data); b.end()  # only hot region timed
-```
-
-## CLI profiles during development
+## Save, export, compare (quick tour)
 
 ```bash
-pybench examples/ --profile fast      # quick iteration
-pybench examples/ --profile thorough  # publish numbers
-pybench examples/ --profile smoke     # sanity check
+pybench examples/ --save latest
+pybench examples/ --save-baseline main
+pybench examples/ --export json:run.json
+pybench examples/ --compare main --fail-on mean:5%,p99:10%
 ```
+
+## Markdown report sample
+
+When you `--export md`, you get a compact table ready for PRs and docs:
+
+| group   | benchmark             | time (avg) | p99      | vs base        |
+| ---     | ---                   | ---        | ---      | ---            |
+| strings | join-baseline  ★      | 12.30 µs   | 12.80 µs | baseline       |
+| strings | join_split            | 11.95 µs   | 12.10 µs | 1.03× faster   |
+| strings | join_plus             | 24.10 µs   | 24.50 µs | 2.00× slower   |
+
+- “≈ same” appears when mean differs ≤ 1% vs the group baseline.
+- Use `baseline=True` on one case per group to anchor comparisons.

@@ -1,19 +1,15 @@
 import textwrap
 from pathlib import Path
 
-from pybench.core import (
-    BenchContext,
-    Case,
-    Result,
-    _detect_used_ctx,
-    _infer_mode,
-    _make_variants,
-    _run_single_repeat,
-    apply_overrides,
-    format_table,
-)
-import pybench.core as core_mod
+from pybench.timing import BenchContext, _pc_ns as _pc_ns_ref
+from pybench.bench_model import Case
+from pybench.runner import detect_used_ctx as _detect_used_ctx, infer_mode as _infer_mode, run_single_repeat as _run_single_repeat, calibrate_n as _calibrate_n
+from pybench.params import make_variants as _make_variants
+from pybench.overrides import apply_overrides
+from pybench.reporters.table import format_table
 import pybench.cli as cli_mod
+from pybench.run_model import VariantResult, StatSummary
+import pybench.timing as timing_mod
 
 
 def test_infer_mode_by_annotation_and_name():
@@ -41,8 +37,8 @@ def test_bench_context_start_end_accumulate(monkeypatch):
         t["now"] += 50
         return t["now"]
 
-    # core now uses _pc_ns() as the time source
-    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
+    # monkeypatch the timing module's clock
+    monkeypatch.setattr(timing_mod, "_pc_ns", fake_pc)
 
     b = BenchContext()
     # end without start: no crash, no effect
@@ -124,7 +120,7 @@ def test_run_single_repeat_context_used_ctx(monkeypatch):
         t["now"] += 100
         return t["now"]
 
-    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
+    monkeypatch.setattr(timing_mod, "_pc_ns", fake_pc)
 
     def fn(b: BenchContext):
         b.start(); b.end()
@@ -143,7 +139,7 @@ def test_run_single_repeat_context_fallback_loop_time(monkeypatch):
         calls["i"] += 1
         return 0 if i == 0 else 500  # for n=5 => 100 per call
 
-    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
+    monkeypatch.setattr(timing_mod, "_pc_ns", fake_pc)
 
     def fn(b: BenchContext):
         pass  # no start/end used
@@ -162,7 +158,7 @@ def test_run_single_repeat_func_mode(monkeypatch):
         calls["i"] += 1
         return 0 if i == 0 else 250  # for n=5 => 50 per call
 
-    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
+    monkeypatch.setattr(timing_mod, "_pc_ns", fake_pc)
 
     def fn():
         return None
@@ -172,32 +168,11 @@ def test_run_single_repeat_func_mode(monkeypatch):
     assert per == 50
 
 
-def test_run_case_with_mocked_calibration(monkeypatch):
-    # Force calibration to n=3 and used_ctx=True
-    monkeypatch.setattr(core_mod, "_calibrate_n", lambda *a, **k: (3, True))
-
-    t = {"now": 0}
-
-    def fake_pc():
-        t["now"] += 100
-        return t["now"]
-
-    monkeypatch.setattr(core_mod, "_pc_ns", fake_pc)
-
-    def fn(b: BenchContext):
-        b.start(); b.end()
-
-    case = Case(name="c", func=fn, mode="context", n=1, repeat=3)
-    results = core_mod.run_case(case)
-    assert len(results) == 1
-    res = results[0]
-    assert res.name == "c" and res.repeat == 3 and all(x == 100 for x in res.per_call_ns)
-
-
 def test_format_table_headers_groups_speedups_and_sorting():
-    r_base = Result(name="base", group="G", n=1, repeat=3, per_call_ns=[200, 200, 200], baseline=True)
-    r_same = Result(name="same", group="G", n=1, repeat=3, per_call_ns=[198, 202, 200])  # ~ same
-    r_fast = Result(name="fast", group="G", n=1, repeat=3, per_call_ns=[100, 100, 100])
+    # Build three VariantResult entries to feed the table formatter
+    r_base = VariantResult(name="base", group="G", n=1, repeat=3, baseline=True, stats=StatSummary(mean=200.0, median=200.0, stdev=0.0, min=200.0, max=200.0, p75=200.0, p99=200.0, p995=200.0))
+    r_same = VariantResult(name="same", group="G", n=1, repeat=3, baseline=False, stats=StatSummary(mean=200.0, median=200.0, stdev=2.0, min=198.0, max=202.0, p75=201.0, p99=202.0, p995=202.0))
+    r_fast = VariantResult(name="fast", group="G", n=1, repeat=3, baseline=False, stats=StatSummary(mean=100.0, median=100.0, stdev=0.0, min=100.0, max=100.0, p75=100.0, p99=100.0, p995=100.0))
 
     txt = format_table([r_base, r_same, r_fast], use_color=False, sort="time", desc=False)
     # Headers present
@@ -210,7 +185,7 @@ def test_format_table_headers_groups_speedups_and_sorting():
     assert "2.00× faster" in txt
 
     # Sorting by group order
-    r2 = Result(name="other", group="A", n=1, repeat=1, per_call_ns=[300])
+    r2 = VariantResult(name="other", group="A", n=1, repeat=1, baseline=False, stats=StatSummary(mean=300.0, median=300.0, stdev=0.0, min=300.0, max=300.0, p75=300.0, p99=300.0, p995=300.0))
     txt2 = format_table([r2, r_base], use_color=False, sort="group", desc=False)
     # Group A header should appear before G
     assert txt2.splitlines()[1].strip().startswith("group: A")
@@ -239,8 +214,8 @@ def test_prepare_variants_handles_warmup_exception(tmp_path: Path):
     cli_mod.load_module_from_path(bench_file)
 
     # Find the registered case
-    cases = core_mod.all_cases()
-    case = next(c for c in cases if c.name == "boom")
+    from pybench.bench_model import all_cases
+    case = next(c for c in all_cases() if c.name == "boom")
 
     # Should not raise, despite the warmup raising once inside
     variants = cli_mod._prepare_variants(case, budget_ns=None, max_n=1000, smoke=False)

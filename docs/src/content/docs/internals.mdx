@@ -11,11 +11,11 @@ High-level notes for maintainers and curious users.
   - `bench(**opts)` is a shorthand for the global default suite.
 - Case
   - Metadata: `name`, `mode` ("func" or "context"), `n`, `repeat`, `warmup`, `args/kwargs`, `params`, `group`, `baseline`.
-  - `params`→ cartesian product variants via `_make_variants`.
+  - `params`→ cartesian product variants via `make_variants`.
 - BenchContext
   - Manual timing: `start()/end()` accumulates nanoseconds; excludes setup noise.
-- Result
-  - Aggregates per-call times (`per_call_ns`) and computes stats: `mean`, `median`, `stdev`, `min`, `max`, `p(q)`.
+- Run/VariantResult
+  - `Run` aggregates `VariantResult` entries, each with stats and optional `samples_ns`.
 
 ## Discovery and execution (CLI)
 
@@ -23,13 +23,19 @@ High-level notes for maintainers and curious users.
 - `load_module_from_path`: import file with a stable module name (`_module_name_for_path`).
 - `run(...)` pipeline:
   1. Optional warmup per case.
-  2. `_prepare_variants`: detects `BenchContext` usage and calibrates `n` per variant using `--budget`/`--max-n` (or "smoke").
-  3. Execute repeats via `_run_single_repeat` and collect `Result`s.
+  2. `prepare_variants`: detects `BenchContext` usage and calibrates `n` per variant using `--budget`/`--max-n` (or "smoke").
+  3. Execute repeats via `run_single_repeat` and collect `VariantResult`s.
   4. Filter, sort, and render table.
+
+## Shared utilities
+
+- `utils.fmt_time_ns` for human-readable time units.
+- `utils.percentile` for p75/p99/p995 interpolation.
+- `utils.compute_speedups` for group baseline comparison used by reporters.
 
 ## Calibration
 
-- `_calibrate_n(...)` grows `n` exponentially toward `target_ns` and refines with ±20% probes.
+- `calibrate_n(...)` grows `n` exponentially toward `target_ns` and refines with ±20% probes.
 - Context mode:
   - If `BenchContext` is actually used (detected by a probe call), only the hot region is timed.
   - Otherwise, the whole function is timed (same as function mode).
@@ -48,9 +54,7 @@ High-level notes for maintainers and curious users.
 - Baseline chosen by `baseline=True` or name heuristic (contains "baseline"/"base").
 - `vs base` shows `≈ same` when relative mean diff ≤ 1%.
 
-## Possible extensions
+## Exports and compare
 
-- Parallel workers for independent variants.
-- JSON/CSV export.
-- Regression compare against previous runs.
-- Setup/teardown hooks per case.
+- Export reports: `--export json|md|csv[:path]`.
+- Compare runs: `--compare BASELINE|PATH` with `--fail-on mean:%,p99:%` policies. P-values via Mann–Whitney U (approx). `p99` policy uses actual p99 delta.

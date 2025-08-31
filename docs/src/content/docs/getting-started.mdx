@@ -68,10 +68,42 @@ Why: context mode excludes per-iteration setup from timing, improving signal.
 ## Profiles you’ll use
 
 ```bash
-pybench examples/ --profile fast      # ~150ms per variant, repeat=10
 pybench examples/ --profile thorough  # ~1s per variant, repeat=30
-pybench examples/ --profile smoke     # no calibration, repeat=3
+pybench examples/ --profile smoke     # no calibration, repeat=3 (default)
 ```
+
+## Save, export, and compare
+
+```bash
+# Save a run and a baseline
+pybench examples/ --save runA
+pybench examples/ --save-baseline main
+
+# Export the latest run to Markdown and CSV
+pybench examples/ --export md:bench.md
+pybench examples/ --export csv:bench.csv
+
+# Compare against a named baseline and fail CI if thresholds exceeded
+pybench examples/ --compare main --fail-on mean:7%,p99:12%
+```
+
+## Compare output example
+
+```bash
+$ pybench examples/ --compare main --fail-on mean:5%,p99:10%
+comparing against: main
+strings/join-baseline: Δ=+0.00% p=n/a [same]
+strings/join_split:    Δ=-2.10% p=0.12 [same]
+strings/join_plus:     Δ=+98.50% p=0.000 [worse]
+❌ thresholds violated
+```
+
+- Δ: variação percentual do tempo médio (positivo = mais lento/regressão).
+- p: p-valor (Mann–Whitney U, aproximação). `same/better/worse` exige significância (α=0.05) além do limiar de 1%.
+- `--fail-on mean:%,p99:%` aplica limites por métrica; `p99` usa delta real do P99.
+
+- Artifacts live under `.pybenchx/`.
+- P-values (Mann–Whitney U, approx) are shown in compare output; `p99` policy uses actual P99 delta.
 
 ## Next steps
 

@@ -1,4 +1,4 @@
-# PyBench — fast, precise microbenchmarks for Python
+# PyBench — precise microbenchmarks for Python
 
 [![CI](https://github.com/fullzer4/pybenchx/actions/workflows/ci.yml/badge.svg)](https://github.com/fullzer4/pybenchx/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pybenchx?label=PyPI)](https://pypi.org/project/pybenchx/)
@@ -15,14 +15,14 @@ pybench examples/ [-k keyword] [-P key=value ...]
 
 ## ✨ Highlights
 
-- Simple API: `@bench(...)` or suites with `Bench` and `BenchContext.start()/end()` for critical sections.
-- Auto-discovery: `pybench <dir>` expands `**/*bench.py`.
-- Parameterization: generate cases via `params={...}` (cartesian product) or per-case `args/kwargs`.
-- Runtime tweaks: `-P key=value` overrides `n`, `repeat`, `warmup`, `group`, and custom params.
-- Sound timing: monotonic high-res clock, GC control, warmup, repeats, context fast-path.
-- Smart calibration: per-variant auto-calibration to hit a time budget.
-- Pretty table: aligned columns, percentiles, iter/s, min…max, group headers, baseline and speedup vs. base.
-- TTY-aware colors: `--no-color` for plain environments.
+- Simple API: `@bench(...)` or suites with `Bench` and `BenchContext.start()/end()` para regiões críticas.
+- Auto-discovery: `pybench <dir>` expande `**/*bench.py`.
+- Parametrização: gere casos via `params={...}` (produto cartesiano) ou por caso com `args/kwargs`.
+- Ajustes em runtime: `-P key=value` sobrescreve `n`, `repeat`, `warmup`, `group` e parâmetros custom.
+- Timing sólido: clock monotônico, controle de GC, warmup, repeats, fast-path de contexto.
+- Calibração esperta: por variante para atingir um budget de tempo.
+- Tabela bonita: colunas alinhadas, percentis, iter/s, min…max, baseline e speedup vs. base.
+- Cores sensíveis a TTY: `--no-color` para ambientes plain.
 
 ## 🚀 Quickstart
 
@@ -71,7 +71,7 @@ def join_baseline(b: BenchContext):
   pybench examples/ -P repeat=5 -P n=10000
   ```
 
-### 🎛️ CLI options that matter
+### 🎛️ CLI options que importam
 
 - Disable color
   ```bash
@@ -88,20 +88,19 @@ def join_baseline(b: BenchContext):
   ```
 - Profiles
   ```bash
-  pybench examples/ --profile fast      # ~150ms budget, repeat=10
   pybench examples/ --profile thorough  # ~1s budget, repeat=30
-  pybench examples/ --profile smoke     # no calibration, repeat=3
+  pybench examples/ --profile smoke     # no calibration, repeat=3 (default)
   ```
 
 ### 📊 Output
 
-Header includes CPU, Python, perf_counter clock info, total time, and mode. Table shows speed vs baseline with percent:
+Header includes CPU, Python, perf_counter clock info, total time, and profile. Table shows speed vs baseline with percent:
 
 ```
-(pybench) [fullzer4@archlinux pybenchx]$ pybench examples/
+(pybench) $ pybench examples/
 cpu: x86_64
 runtime: python 3.13.5 (x86_64-linux) | perf_counter: res=1.0e-09s, mono=True
-time: 23.378s | mode: default, budget=0.3s, max-n=1000000, smoke=False, sequential
+time: 23.378s | profile: smoke, budget=-, max-n=1000000, sequential
 benchmark                          time (avg)       iter/s              (min … max)          p75          p99         p995      vs base
 join                                 13.06 µs       76.6 K      13.00 µs … 13.21 µs     13.08 µs     13.20 µs     13.21 µs            -
 join_param[n=100,sep='-']            13.17 µs       75.9 K      12.79 µs … 13.72 µs     13.37 µs     13.70 µs     13.71 µs            -
@@ -116,6 +115,6 @@ concat                               10.62 µs       94.1 K      10.54 µs … 1
 
 ## 💡 Tips
 
-- Use `BenchContext.start()/end()` to isolate the critical section and avoid setup noise.
-- Prefer `--profile fast` during development; switch to `--profile thorough` before publishing numbers.
-- For CI or logs, use `--no-color`.
+- Use `BenchContext.start()/end()` para isolar a seção crítica e evitar ruído de setup.
+- Prefira `--profile smoke` durante o desenvolvimento; troque para `--profile thorough` antes de publicar números.
+- Para CI ou logs, use `--no-color`.

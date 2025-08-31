@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 
 import pybench.cli as cli_mod
-import pybench.core as core_mod
+import pybench.bench_model as bench_mod
 
 
 def test_benchmark_with_invalid_context_usage_falls_back(tmp_path: Path, monkeypatch):
@@ -22,7 +22,7 @@ def test_benchmark_with_invalid_context_usage_falls_back(tmp_path: Path, monkeyp
     cli_mod.load_module_from_path(bench)
 
     # Ensure _prepare_variants marks used_ctx=False and sets some local_n
-    (case,) = core_mod.all_cases()
+    (case,) = bench_mod.all_cases()
     variants = cli_mod._prepare_variants(case, budget_ns=None, max_n=10, smoke=True)
     assert variants[0][3] is False  # used_ctx
 

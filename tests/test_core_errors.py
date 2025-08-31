@@ -1,4 +1,7 @@
-from pybench.core import BenchContext, Case, _make_variants, apply_overrides
+from pybench.timing import BenchContext
+from pybench.bench_model import Case
+from pybench.params import make_variants as _make_variants
+from pybench.overrides import apply_overrides
 
 
 def test_make_variants_empty_params_and_kwargs_merge():

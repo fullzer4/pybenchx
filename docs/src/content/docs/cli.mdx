@@ -25,14 +25,18 @@ pyb <...>
 --desc                # descending order
 --budget 300ms        # per-variant budget (calibration). Accepts ns, ms, s
 --max-n 1000000       # cap for calibrated n
---profile [fast|thorough|smoke]
+--profile [thorough|smoke]
 --brief               # compact output: benchmark, time(avg), vs base
+--save LABEL          # save this run under .pybenchx/runs with optional label
+--save-baseline NAME  # save this run as a named baseline under .pybenchx/baselines
+--compare BASE|PATH   # compare current run against a baseline name or JSON file
+--fail-on POLICY      # e.g. "mean:7%,p99:12%"; checked when --compare is used
+--export FMT[:PATH]   # export as json|md|csv to stdout or a file when a path is given
 ```
 
 Profiles:
-- fast: `budget≈150ms`, `repeat=10`
 - thorough: `budget≈1s`, `repeat=30`
-- smoke: no calibration, `repeat=3`, `warmup=0`
+- smoke (default): no calibration, `repeat=3`, `warmup=0`
 
 ## Overrides with -P
 
@@ -51,5 +55,11 @@ pybench examples/ --brief
 
 ## Header and table
 
-- Header: CPU, Python, clock resolution, profile/mode.
+- Header: CPU, Python, clock resolution, profile.
 - Table: mean, iter/s, min…max, p75/p99/p995, baseline and speed vs base. “≈ same” when ≤1% diff.
+
+## Run management
+
+- Runs and baselines are stored under `.pybenchx/` in your project root.
+- `--compare` prints a simple diff and applies `--fail-on` thresholds.
+- P-values via Mann–Whitney U (approx). `p99` policy uses actual P99 delta.

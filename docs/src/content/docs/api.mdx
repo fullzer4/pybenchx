@@ -61,11 +61,10 @@ Notes:
 
 ## Results
 
-Each case yields a `Result` with:
-- per_call_ns: list[float] of per-call time (ns)
-- mean, median, stdev, min, max
-- p(q): percentile (linear interpolation)
-- group, baseline flags
+Data model:
+- Run(meta, suite_signature, results: list[VariantResult])
+- VariantResult(name, group, n, repeat, baseline, stats, samples_ns)
+- StatSummary(mean, median, stdev, min, max, p75, p99, p995)
 
 The rendered table adds:
 - iter/s: derived from mean

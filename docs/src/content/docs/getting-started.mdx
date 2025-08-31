@@ -83,7 +83,7 @@ pybench examples/ --save-baseline main
 pybench examples/ --export md:bench.md
 pybench examples/ --export csv:bench.csv
 
-# Compare against a named baseline and fail CI if thresholds exceeded
+# Compare against a named baseline and enforce thresholds
 pybench examples/ --compare main --fail-on mean:7%,p99:12%
 ```
 

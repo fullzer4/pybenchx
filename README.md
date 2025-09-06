@@ -3,7 +3,8 @@
 [![CI](https://github.com/fullzer4/pybenchx/actions/workflows/ci.yml/badge.svg)](https://github.com/fullzer4/pybenchx/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pybenchx?label=PyPI)](https://pypi.org/project/pybenchx/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/pybenchx.svg)](https://pypi.org/project/pybenchx/)
-[![License](https://img.shields.io/github/license/fullzer4/pybenchx.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Downloads](https://static.pepy.tech/badge/pybenchx)](https://pepy.tech/project/pybenchx)
 
 Measure small, focused snippets with minimal boilerplate, auto-discovery, smart calibration, and a clean CLI (command: `pybench`).
 

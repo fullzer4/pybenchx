@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import gc
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+import statistics as _stats
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import timing as _timing
 from .bench_model import Case
 from .params import make_variants as _make_variants
+from .run_model import VariantResult, StatSummary
 
 
 def infer_mode(fn: Callable[..., Any]) -> str:
@@ -164,10 +167,189 @@ def run_case(case: Case) -> List[float]:
             gc.enable()
 
 
+def _create_stats(per_call_ns: List[float]) -> StatSummary:
+    """Create StatSummary from samples."""
+    from .utils import percentile as _percentile
+    svals = sorted(per_call_ns)
+    return StatSummary(
+        mean=(_stats.fmean(per_call_ns) if hasattr(_stats, "fmean") else (sum(per_call_ns) / len(per_call_ns) if per_call_ns else float("nan"))),
+        median=_stats.median(per_call_ns) if per_call_ns else float("nan"),
+        stdev=_stats.pstdev(per_call_ns) if per_call_ns else float("nan"),
+        min=(svals[0] if svals else float("nan")),
+        max=(svals[-1] if svals else float("nan")),
+        p75=_percentile(svals, 75),
+        p99=_percentile(svals, 99),
+        p995=_percentile(svals, 99.5),
+    )
+
+
+def run_warmup(case: Case, kw: Optional[str] = None) -> None:
+    """Run warmup iterations for a case."""
+    for _ in range(case.warmup):
+        try:
+            for _vname, vargs, vkwargs in _make_variants(case):
+                if kw is not None and (kw not in _vname.lower()):
+                    continue
+                if case.mode == "context":
+                    ctx = _timing.BenchContext()
+                    def fn():
+                        return case.func(ctx, *vargs, **vkwargs)
+                else:
+                    def fn():
+                        return case.func(*vargs, **vkwargs)
+                try:
+                    fn()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+
+def execute_case_sequential(
+    case: Case,
+    *,
+    budget_ns: Optional[int],
+    max_n: int,
+    smoke: bool,
+    profile: Optional[str],
+    kw: Optional[str] = None,
+) -> List[VariantResult]:
+    """Execute a case sequentially (original behavior)."""
+    from .utils import prepare_variants as _prepare_variants
+    prepared = _prepare_variants(case, budget_ns=budget_ns, max_n=max_n, smoke=smoke)
+    variants: List[VariantResult] = []
+    
+    for vname, vargs, vkwargs, used_ctx, local_n in prepared:
+        # keyword filter
+        if kw is not None and (kw not in vname.lower()):
+            continue
+        
+        per_call_ns: List[float] = []
+        for _ in range(case.repeat):
+            per_call_ns.append(
+                run_single_repeat(case, vname, vargs, vkwargs, used_ctx, local_n)
+            )
+        
+        stats = _create_stats(per_call_ns)
+        variants.append(
+            VariantResult(
+                name=vname,
+                group=(case.group or "-") if case.group is not None else "-",
+                n=case.n,
+                repeat=case.repeat,
+                baseline=case.baseline,
+                stats=stats,
+                samples_ns=(per_call_ns if (profile == "thorough") else None),
+            )
+        )
+    
+    return variants
+
+
+def execute_case_parallel(
+    case: Case,
+    *,
+    budget_ns: Optional[int],
+    max_n: int,
+    smoke: bool,
+    profile: Optional[str],
+    kw: Optional[str] = None,
+    max_workers: int = 4,
+) -> List[VariantResult]:
+    """Execute a case with parallel variant execution."""
+    from .utils import prepare_variants as _prepare_variants
+    prepared = _prepare_variants(case, budget_ns=budget_ns, max_n=max_n, smoke=smoke)
+    
+    def run_variant(variant_data):
+        vname, vargs, vkwargs, used_ctx, local_n = variant_data
+        if kw is not None and (kw not in vname.lower()):
+            return None
+        
+        per_call_ns: List[float] = []
+        for _ in range(case.repeat):
+            per_call_ns.append(
+                run_single_repeat(case, vname, vargs, vkwargs, used_ctx, local_n)
+            )
+        
+        stats = _create_stats(per_call_ns)
+        return VariantResult(
+            name=vname,
+            group=(case.group or "-") if case.group is not None else "-",
+            n=case.n,
+            repeat=case.repeat,
+            baseline=case.baseline,
+            stats=stats,
+            samples_ns=(per_call_ns if (profile == "thorough") else None),
+        )
+    
+    variants: List[VariantResult] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(run_variant, v) for v in prepared]
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                variants.append(result)
+    
+    return variants
+
+
+def execute_case(
+    case: Case,
+    *,
+    budget_ns: Optional[int],
+    max_n: int,
+    smoke: bool,
+    profile: Optional[str],
+    parallel: bool = False,
+    kw: Optional[str] = None,
+) -> List[VariantResult]:
+    """Execute a case and return results.
+    
+    Args:
+        case: The benchmark case to run
+        budget_ns: Time budget for calibration
+        max_n: Maximum iterations per repeat
+        smoke: Whether smoke mode is enabled
+        profile: Profile name (affects sample storage)
+        parallel: Enable parallel execution for variants
+        kw: Optional keyword filter
+    
+    Returns:
+        List of VariantResult objects
+    """
+    from .utils import prepare_variants as _prepare_variants
+    prepared = _prepare_variants(case, budget_ns=budget_ns, max_n=max_n, smoke=smoke)
+    
+    # Heuristic: parallel only helps with many variants (>5)
+    # For quick profiles with few variants, sequential is faster
+    use_parallel = parallel and len(prepared) > 5
+    
+    if use_parallel:
+        return execute_case_parallel(
+            case,
+            budget_ns=budget_ns,
+            max_n=max_n,
+            smoke=smoke,
+            profile=profile,
+            kw=kw,
+        )
+    else:
+        return execute_case_sequential(
+            case,
+            budget_ns=budget_ns,
+            max_n=max_n,
+            smoke=smoke,
+            profile=profile,
+            kw=kw,
+        )
+
+
 __all__ = [
     "infer_mode",
     "detect_used_ctx",
     "calibrate_n",
     "run_single_repeat",
     "run_case",
+    "execute_case",
+    "run_warmup",
 ]

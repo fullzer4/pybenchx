@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Dict
+import hashlib
+import os
+from typing import List, Optional, Dict
 
 from .bench_model import Case
 from .runner import calibrate_n as _calibrate_n, detect_used_ctx as _detect_used_ctx
 from .params import make_variants as _make_variants
 from .profiles import DEFAULT_BUDGET_NS
 from .run_model import VariantResult
+
+
+def _module_name_for_path(path: str) -> str:
+    """Stable unique module name for importing standalone files."""
+    p = os.path.abspath(path)
+    h = hashlib.sha1(p.encode("utf-8")).hexdigest()[:12]
+    stem = os.path.splitext(os.path.basename(p))[0]
+    return f"pybenchx_{stem}_{h}"
 
 
 def parse_ns(s: str) -> int:
@@ -91,10 +101,21 @@ def prepare_variants(case: Case, *, budget_ns: Optional[int], max_n: int, smoke:
 
     - used_ctx is computed only for context mode
     - local_n is calibrated per-variant unless smoke=True
+    
+    Fast-path optimization: skip context detection and calibration for simple cases.
     """
     variants = _make_variants(case)
     prepared = []
+    
+    # Fast-path: simple case without params in smoke mode
+    is_simple = smoke and not case.params and case.mode == "func"
+    
     for vname, vargs, vkwargs in variants:
+        if is_simple:
+            # Fast-path: no detection, no calibration
+            prepared.append((vname, vargs, vkwargs, False, case.n))
+            continue
+            
         if case.mode == "context":
             try:
                 used_ctx = _detect_used_ctx(case.func, vargs, vkwargs)
@@ -106,11 +127,12 @@ def prepare_variants(case: Case, *, budget_ns: Optional[int], max_n: int, smoke:
         if smoke:
             local_n = case.n
         else:
+            # Direct calibration without caching
             target_total = budget_ns if budget_ns is not None else DEFAULT_BUDGET_NS
             # budget per repeat to split across repeats
             target = max(1_000_000, int(target_total) // max(1, case.repeat))
             try:
-                calib_n, _ = _calibrate_n(
+                calib_n, calib_used_ctx = _calibrate_n(
                     case.func,
                     case.mode,
                     vargs,
@@ -119,6 +141,8 @@ def prepare_variants(case: Case, *, budget_ns: Optional[int], max_n: int, smoke:
                     max_n=max_n,
                 )
                 local_n = max(case.n, calib_n)  # never reduce n
+                if case.mode == "context":
+                    used_ctx = calib_used_ctx
             except Exception:
                 local_n = case.n
         prepared.append((vname, vargs, vkwargs, used_ctx, local_n))
@@ -131,4 +155,5 @@ __all__ = [
     "fmt_time_ns",
     "percentile",
     "compute_speedups",
+    "_module_name_for_path",
 ]

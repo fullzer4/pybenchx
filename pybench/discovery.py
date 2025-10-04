@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import List, Sequence
 
-from .path_utils import _module_name_for_path
+from .utils import _module_name_for_path
 
 GLOB = "**/*bench.py"
 

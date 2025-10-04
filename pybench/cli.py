@@ -2,29 +2,25 @@ from __future__ import annotations
 
 import argparse
 import time
-import statistics as _stats
 from pathlib import Path
 from typing import List, Optional
 
-from .timing import BenchContext
 from .bench_model import all_cases
-from .runner import run_single_repeat as _run_single_repeat
-from .run_model import Run, RunMeta, VariantResult, StatSummary  # type: ignore
-from .suite_sig import suite_signature_from_cases  # type: ignore
+from .run_model import Run, RunMeta
+from .suite_sig import suite_signature_from_cases
 from . import run_store
-from . import compare as compare_mod
 from .reporters import json as rep_json
 from .reporters import markdown as rep_md
 from .reporters import csv as rep_csv
 from .reporters.table import format_table as fmt_table_model
+from .reporters.diff import format_comparison
 from .discovery import discover, load_module_from_path
 from .meta import collect_git, tool_version, runtime_strings, env_strings
 from .utils import parse_ns as _parse_ns
-from .utils import prepare_variants as _prepare_variants
 from .overrides import parse_overrides, apply_overrides
 from .params import make_variants as _make_variants
 from .profiles import apply_profile as _apply_profile
-from .utils import percentile as _percentile
+from .runner import execute_case, run_warmup
 
 
 # Expose last built run for downstream tooling/tests if needed
@@ -43,6 +39,8 @@ def run(
     profile: Optional[str],
     max_n: int,
     brief: bool = False,
+    minimal: bool = False,
+    parallel: bool = False,  # Disabled by default - overhead not worth it for quick benchmarks
     save: Optional[str] = None,
     save_baseline: Optional[str] = None,
     compare: Optional[str] = None,
@@ -74,21 +72,35 @@ def run(
 
     start_ts = time.perf_counter()
     started_at_iso = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-    cpu, runtime = runtime_strings()
-    print("cpu: {}".format(cpu))
-    ci = time.get_clock_info("perf_counter")
-    print(
-        "runtime: {} | perf_counter: res={:.1e}s, mono={}".format(
-            runtime, ci.resolution, ci.monotonic
+    
+    # Quick mode: skip expensive system info for fast iterations
+    # Only load when needed for save/compare operations
+    need_full_meta = save or save_baseline or compare
+    
+    # Default is quick mode (profile=None becomes "quick")
+    effective_profile = profile or "quick"
+    
+    if (effective_profile == "quick" and not need_full_meta) or minimal:
+        if not minimal:
+            print("⚡ quick mode | fast iteration")
+        cpu = "n/a"
+        ci = None
+    else:
+        cpu, runtime = runtime_strings()
+        print("cpu: {}".format(cpu))
+        ci = time.get_clock_info("perf_counter")
+        print(
+            "runtime: {} | perf_counter: res={:.1e}s, mono={}".format(
+                runtime, ci.resolution, ci.monotonic
+            )
         )
-    )
 
     import sys as _sys
     if use_color is None:
         use_color = _sys.stdout.isatty()
 
-    # Collect VariantResult directly
-    variants: List[VariantResult] = []
+    # Collect VariantResult directly from execution module
+    variants = []
 
     # Precompile keyword lower for filtering
     kw = (keyword or "").lower() or None
@@ -103,68 +115,46 @@ def run(
             if not any_match:
                 continue
 
-        for _ in range(max(0, case.warmup)):
-            try:
-                for _vname, vargs, vkwargs in _make_variants(case):
-                    if kw is not None and (kw not in _vname.lower()):
-                        continue
-                    if case.mode == "context":
-                        ctx = BenchContext()
-                        def fn():
-                            return case.func(ctx, *vargs, **vkwargs)
-                    else:
-                        def fn():
-                            return case.func(*vargs, **vkwargs)
-                    try:
-                        fn()
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+        # Optimize warmup: skip for quick mode with small n (already fast)
+        should_warmup = case.warmup > 0 and not (effective_profile == "quick" and case.n <= 10)
+        
+        if should_warmup:
+            run_warmup(case, kw=kw)
 
-        prepared = _prepare_variants(case, budget_ns=budget_ns, max_n=max_n, smoke=smoke)
-        for vname, vargs, vkwargs, used_ctx, local_n in prepared:
-            # keyword filter
-            if kw is not None and (kw not in vname.lower()):
-                continue
-            per_call_ns: List[float] = []
-            for _ in range(case.repeat):
-                per_call_ns.append(
-                    _run_single_repeat(case, vname, vargs, vkwargs, used_ctx, local_n)
-                )
-            svals = sorted(per_call_ns)
-            stats = StatSummary(
-                mean=(_stats.fmean(per_call_ns) if hasattr(_stats, "fmean") else (sum(per_call_ns) / len(per_call_ns) if per_call_ns else float("nan"))),
-                median=_stats.median(per_call_ns) if per_call_ns else float("nan"),
-                stdev=_stats.pstdev(per_call_ns) if per_call_ns else float("nan"),
-                min=(svals[0] if svals else float("nan")),
-                max=(svals[-1] if svals else float("nan")),
-                p75=_percentile(svals, 75),
-                p99=_percentile(svals, 99),
-                p995=_percentile(svals, 99.5),
-            )
-            variants.append(
-                VariantResult(
-                    name=vname,
-                    group=(case.group or "-") if case.group is not None else "-",
-                    n=case.n,
-                    repeat=case.repeat,
-                    baseline=case.baseline,
-                    stats=stats,
-                    samples_ns=(per_call_ns if (profile == "thorough") else None),
-                )
-            )
+        # Execute case using new execution module
+        case_results = execute_case(
+            case,
+            budget_ns=budget_ns,
+            max_n=max_n,
+            smoke=smoke,
+            profile=profile,
+            parallel=parallel,
+            kw=kw,
+        )
+        variants.extend(case_results)
 
     elapsed = time.perf_counter() - start_ts
 
-    # Build Run object (contract)
-    branch, sha, dirty = collect_git()
-    py_ver, os_str = env_strings()
+    # Build Run object (contract) - lazy load meta info if needed
+    if need_full_meta:
+        branch, sha, dirty = collect_git()
+        py_ver, os_str = env_strings()
+        if cpu == "n/a":  # wasn't loaded earlier
+            cpu, _ = runtime_strings()
+            ci = time.get_clock_info("perf_counter")
+    else:
+        # Minimal metadata for quick runs
+        branch, sha, dirty = None, None, False
+        py_ver, os_str = env_strings()
+        if cpu == "n/a":
+            cpu = "quick-mode"
+            ci = time.get_clock_info("perf_counter")
+    
     meta = RunMeta(
         tool_version=tool_version(),
         started_at=started_at_iso,
         duration_s=elapsed,
-        profile=(profile or "smoke"),
+        profile=(profile or "quick"),
         budget_ns=budget_ns,
         git={"branch": branch, "sha": sha, "dirty": dirty},
         python_version=py_ver,
@@ -179,46 +169,57 @@ def run(
     LAST_RUN = Run(meta=meta, suite_signature=suite_sig, results=variants)
 
     # Now that LAST_RUN is built, render the table
-    profile_label = (profile or "smoke")
+    profile_label = (profile or "quick")
     budget_label = f"{budget_ns / 1e9}s" if budget_ns else "-"
-    print(
-        "time: {:.3f}s | profile: {}, budget={}, max-n={}, sequential".format(
-            elapsed, profile_label, budget_label, max_n
+    mode_label = "parallel" if parallel else "sequential"
+    
+    if not minimal:
+        print(
+            "time: {:.3f}s | profile: {}, budget={}, max-n={}, {}".format(
+                elapsed, profile_label, budget_label, max_n, mode_label
+            )
         )
-    )
+    
     print(
         fmt_table_model(
-            LAST_RUN.results if LAST_RUN else [], use_color=use_color, sort=sort, desc=desc, brief=brief
+            LAST_RUN.results if LAST_RUN else [], use_color=use_color, sort=sort, desc=desc, brief=brief or minimal
         )
     )
 
     rc = 0
 
-    # Save run
+    # Auto-save every run for history tracking (enables easy comparisons)
+    if LAST_RUN:
+        try:
+            run_store.auto_save_run(LAST_RUN)
+        except Exception:
+            pass  # Silent fail - don't break flow for save errors
+
+    # Save labeled run
     if LAST_RUN and save is not None:
         path = run_store.save_run(LAST_RUN, label=save)
-        print(f"saved run: {path}")
+        if not minimal:
+            print(f"saved run: {path}")
 
     # Save baseline
     if LAST_RUN and save_baseline:
         bpath = run_store.save_baseline(LAST_RUN, save_baseline)
-        print(f"saved baseline: {bpath}")
+        if not minimal:
+            print(f"saved baseline: {bpath}")
 
-    # Compare against baseline or path
+    # Compare against baseline or path (now using new diff_output module)
     if LAST_RUN and compare:
         name, base = run_store.load_baseline(compare)
-        print(f"comparing against: {name}")
-        report = compare_mod.diff(LAST_RUN, base)
-        policy = compare_mod.parse_fail_policy(fail_on or "")
-        violated = compare_mod.violates_policy(report, policy)
-        # Simple diff summary to stdout
-        for d in report.compared:
-            print(f"{d.group}/{d.name}: Δ={d.delta_pct:+.2f}% p={d.p_value if d.p_value is not None else 'n/a'} [{d.status}]")
-        if report.suite_changed:
-            print("⚠️  suite changed (partial diff)")
-        if violated:
-            print("❌ thresholds violated")
-            rc = 2
+        output, exit_code = format_comparison(
+            LAST_RUN,
+            base,
+            name,
+            use_color=use_color,
+            fail_on=fail_on,
+        )
+        print(output)
+        if exit_code != 0:
+            rc = exit_code
 
     # Export report
     if LAST_RUN and export:
@@ -269,16 +270,26 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--max-n", type=int, default=1_000_000, help="Maximum calibrated n per repeat.")
     parser.add_argument(
         "--profile",
-        choices=["thorough", "smoke"],
-        help="Presets: thorough (1s, repeat=30); smoke (no calibration, repeat=3, warmup=0). Default is smoke.",
+        choices=["quick", "smoke", "thorough"],
+        help="Presets: quick (n=10, repeat=1, DEFAULT); smoke (repeat=3, warmup=0); thorough (1s, repeat=30).",
     )
     parser.add_argument(
         "--brief",
         action="store_true",
         help="Brief output: only benchmark, time(avg), and vs base columns.",
     )
+    parser.add_argument(
+        "--minimal",
+        action="store_true",
+        help="Minimal output: brief table, no metadata, perfect for quick checks.",
+    )
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Enable parallel execution for multiple variants (useful for parameterized benchmarks with >5 variants).",
+    )
 
-    # New flags (contract only)
+    # Storage & comparison flags
     parser.add_argument("--save", metavar="LABEL", help="Save this run under .pybenchx/runs with an optional label.")
     parser.add_argument(
         "--save-baseline",
@@ -291,9 +302,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Compare this run against a baseline name or a JSON file; fail policy via --fail-on.",
     )
     parser.add_argument(
+        "--vs",
+        metavar="REF",
+        help="Quick compare shortcut: --vs main, --vs test-branch, or --vs last (compare against last run).",
+    )
+    parser.add_argument(
         "--fail-on",
         metavar="POLICY",
-        help='Failure policy, e.g. "mean:7%,p99:12%" (similar to pytest-benchmark).',
+        help='Failure policy, e.g. "mean:7%%,p99:12%%" (similar to pytest-benchmark).',
     )
     parser.add_argument(
         "--export",
@@ -303,6 +319,24 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     args = parser.parse_args(argv)
     budget_ns = _parse_ns(args.budget) if args.budget else None
+    
+    # Handle --vs shortcut: simple store-based comparisons
+    compare_target = args.compare
+    if args.vs:
+        # --vs last: compare against most recent run
+        if args.vs == "last":
+            latest = run_store.get_latest_run()
+            if latest:
+                # Save as temp baseline
+                temp_name = f"_last_{int(time.time())}"
+                run_store.save_baseline(latest, temp_name)
+                compare_target = temp_name
+                print("🔍 comparing against: last run")
+            else:
+                print("⚠️  no previous runs found in .pybenchx/runs/")
+        else:
+            # Assume it's a baseline name (e.g., main, test-branch, etc)
+            compare_target = args.vs
 
     return run(
         args.paths,
@@ -315,9 +349,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         profile=args.profile,
         max_n=args.max_n,
         brief=args.brief,
+        minimal=args.minimal,
+        parallel=args.parallel,  # Now opt-in with --parallel flag
         save=args.save,
         save_baseline=args.save_baseline,
-        compare=args.compare,
+        compare=compare_target,
         fail_on=args.fail_on,
         export=args.export,
     )

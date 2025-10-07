@@ -1,0 +1,133 @@
+---
+title: Decorators & Suites
+---
+
+Everything starts with the decorator workflow. This page documents the surfaces you get when importing from `pybench`.
+
+## Imports
+
+```python
+from pybench import bench, Bench, BenchContext
+```
+
+- `bench`: module-level decorator bound to the default suite.
+- `Bench`: factory for creating named suites and grouping related cases.
+- `BenchContext`: manual timing helper used in context mode (documented separately).
+
+## `bench(**opts)`
+
+`bench` registers the wrapped function as a benchmark case. Options map directly to the underlying `Case` dataclass defined in `pybench.bench_model`.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `name` | `str` | function name | Display name in reports |
+| `params` | `dict[str, Iterable]` | `None` | Cartesian product of parameters; generates one variant per combination |
+| `args` / `kwargs` | tuple / dict | `()` / `{}` | Positional/keyword args applied to every variant |
+| `n` | `int` | `100` | Iterations per repeat (minimum loop count) |
+| `repeat` | `int` | `20` | Number of measured repeats |
+| `warmup` | `int` | `2` | Untimed warmup repeats before sampling |
+| `group` | `str\|None` | `None` | Table group name (defaults to suite/group heuristics) |
+| `baseline` | `bool` | `False` | Mark this variant as the baseline for its group |
+
+### Function vs context mode
+
+- **Function mode** (default): the entire call is timed.
+- **Context mode**: if the first parameter is annotated with `BenchContext` (or named `b`, `ctx`, `context`), pybenchx injects a context object. Only the code between `start()` and `end()` is measured.
+
+```python
+from pybench import bench, BenchContext
+
+@bench(name="join", repeat=15)
+def join(sep: str = ","):
+    sep.join(str(i) for i in range(1_000))
+
+@bench(name="join-context")
+def join_context(b: BenchContext, sep: str = ","):
+    values = [str(i) for i in range(1_000)]
+    b.start(); sep.join(values); b.end()
+```
+
+### Parameter grids
+
+`params` defines a cartesian product. Each combination produces a distinct variant (with an auto-generated suffix) and is visible to the CLI filters (`-k`, `--group`).
+
+```python
+import json
+
+DATA = {"numbers": list(range(10))}
+
+@bench(
+    name="json-dumps",
+    params={
+        "indent": [None, 2, 4],
+        "sort_keys": [False, True],
+    },
+)
+def dumps(indent, sort_keys):
+    json.dumps(DATA, indent=indent, sort_keys=sort_keys)
+```
+
+Override parameters at runtime with `pybench run ... -P indent=2 -P sort_keys=true`; CLI overrides shadow the decorator defaults.
+
+### Baselines and groups
+
+- One baseline per group keeps `vs base` comparisons meaningful.
+- You can opt in by setting `baseline=True` on any variant.
+- When no explicit baseline exists, pybenchx falls back to the first case whose name contains `baseline` / `base` in the group.
+
+Grouping defaults:
+
+1. If you call `Bench("strings", group="join")`, all cases inherit `group="join"`.
+2. Otherwise the suite name (unless it’s `bench`/`default`).
+3. Finally, `-` is used to denote “no group”.
+
+## `Bench`
+
+Create explicit suites when you need multiple baselines or want to keep modules self-contained.
+
+```python
+from pybench import Bench, BenchContext
+
+strings = Bench("strings")
+
+@strings.bench(name="baseline", baseline=True)
+def baseline_case(b: BenchContext):
+    data = ",".join(str(i) for i in range(100))
+    b.start(); ",".join([data] * 5); b.end()
+
+@strings.bench(name="split")
+def split_case(sep=","):
+    """Function mode, inherits group from the suite."""
+    ",".join(str(i) for i in range(100)).split(sep)
+
+# Equivalent shorthand using the suite as a decorator
+@strings(name="split-context")
+def split_with_ctx(b: BenchContext, sep=","):
+    values = [str(i) for i in range(100)]
+    joined = sep.join(values)
+    b.start(); joined.split(sep); b.end()
+```
+
+Notes:
+
+- Suites register themselves in a global registry (`pybench.bench_model._ALL_BENCHES`). Discovery collects all cases at runtime.
+- You can instantiate multiple suites per module; the CLI merges them into a single run.
+
+## `Case` dataclass (advanced)
+
+Behind the scenes pybenchx stores metadata in `pybench.bench_model.Case`. Access these attributes inside custom tooling when you need to inspect variants programmatically.
+
+```python
+from pybench.bench_model import Case
+
+case: Case
+print(case.name, case.group, case.params, case.mode)
+```
+
+Mutation safety: each variant receives copies of `args`, `kwargs`, and `params` so mutating them inside benchmarks is safe. If you need shared state, construct it outside the decorated function.
+
+## Interop tips
+
+- Decorate lightweight callables; heavy setup belongs either outside the function or behind `BenchContext` guards.
+- Prefer deterministic benchmarks—seed RNGs and avoid network or filesystem I/O—to keep comparisons stable.
+- When mixing `bench` and `Bench`, no special coordination is required; all cases flow into the same run results.

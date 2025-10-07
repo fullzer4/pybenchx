@@ -1,14 +1,23 @@
+"""Render benchmark results as ANSI-aware tables."""
+
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional, Tuple
 
 from ..run_model import VariantResult
-from ._ansi import RESET, YELLOW, CYAN, MAGENTA, DIM, pad_cell
-from ..utils import fmt_time_ns, compute_speedups
+from ..utils import compute_speedups, fmt_time_ns
+from ._ansi import CYAN, DIM, MAGENTA, RESET, YELLOW, pad_cell
 
 
-def format_table(results: List[VariantResult], *, use_color: bool = True, sort: Optional[str] = None, desc: bool = False, brief: bool = False) -> str:
+def format_table(
+    results: list[VariantResult],
+    *,
+    use_color: bool = True,
+    sort: str | None = None,
+    desc: bool = False,
+    brief: bool = False,
+) -> str:
+    """Return a formatted table for ``results`` suitable for console output."""
     speedups = compute_speedups(results)
 
     headers = (
@@ -42,20 +51,20 @@ def format_table(results: List[VariantResult], *, use_color: bool = True, sort: 
             return f"{ips / 1_000.0:.1f} K"
         return f"{ips:.1f}"
 
-    grouped: Dict[str, List[VariantResult]] = {}
+    grouped: dict[str, list[VariantResult]] = {}
     for r in results:
         grouped.setdefault(r.group, []).append(r)
 
     if sort == "group":
         group_keys = sorted(grouped.keys(), reverse=desc)
     else:
-        seen: List[str] = []
+        seen: list[str] = []
         for r in results:
             if r.group not in seen:
                 seen.append(r.group)
         group_keys = seen
 
-    def sort_items(items: List[VariantResult]) -> List[VariantResult]:
+    def sort_items(items: list[VariantResult]) -> list[VariantResult]:
         if sort in {"group", "time"}:
             return sorted(items, key=lambda r: r.stats.mean, reverse=desc)
         return items
@@ -98,7 +107,9 @@ def format_table(results: List[VariantResult], *, use_color: bool = True, sort: 
                     colorize(p995, MAGENTA),
                     vs,
                 ]
-            lines.append(" ".join(pad_cell(c, w, a) for (h, w, a), c in zip(headers, cells)))
+            lines.append(
+                " ".join(pad_cell(c, w, a) for (h, w, a), c in zip(headers, cells))
+            )
     return "\n".join(lines)
 
 

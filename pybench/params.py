@@ -1,16 +1,20 @@
+"""Variant expansion helpers for parameterized benchmark cases."""
+
 from __future__ import annotations
 
 import itertools
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any
 
 from .bench_model import Case
 
 
 def fmt_value(v: Any) -> str:
+    """Format parameter values for variant naming."""
     return repr(v) if isinstance(v, str) else str(v)
 
 
-def make_variants(case: Case) -> List[Tuple[str, tuple, Dict[str, Any]]]:
+def make_variants(case: Case) -> list[tuple[str, tuple, dict[str, Any]]]:
+    """Generate named argument combinations for a :class:`Case`."""
     base_args = case.args
     base_kwargs = dict(case.kwargs)
     if not case.params:
@@ -18,7 +22,7 @@ def make_variants(case: Case) -> List[Tuple[str, tuple, Dict[str, Any]]]:
 
     keys = sorted(case.params.keys())
     value_lists = [list(case.params[k]) for k in keys]
-    variants: List[Tuple[str, tuple, Dict[str, Any]]] = []
+    variants: list[tuple[str, tuple, dict[str, Any]]] = []
     for values in itertools.product(*value_lists):
         kw = dict(base_kwargs)
         for k, v in zip(keys, values):

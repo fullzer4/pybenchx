@@ -2,59 +2,97 @@
 title: Internals
 ---
 
-High-level notes for maintainers and curious users.
+Notes for maintainers, extension authors, and curious users who want to understand how pybenchx is stitched together.
 
-## Core components
+## Architecture in one glance
 
-- Bench / bench decorator
-  - `Bench` holds `Case` items; `Bench(...).bench(...)` registers decorated functions.
-  - `bench(**opts)` is a shorthand for the global default suite.
-- Case
-  - Metadata: `name`, `mode` ("func" or "context"), `n`, `repeat`, `warmup`, `args/kwargs`, `params`, `group`, `baseline`.
-  - `params`→ cartesian product variants via `make_variants`.
-- BenchContext
-  - Manual timing: `start()/end()` accumulates nanoseconds; excludes setup noise.
-- Run/VariantResult
-  - `Run` aggregates `VariantResult` entries, each with stats and optional `samples_ns`.
+```
+bench files → discovery → variant planning → runner → reporters + store → exports/compare
+```
 
-## Discovery and execution (CLI)
+- **Discovery (`pybench.discovery`)** finds benchmark files under the paths you pass to the CLI (`**/*bench.py` by default) and imports them with a stable synthetic module name so repeated runs do not pollute `sys.modules`.
+- **Registry (`pybench.bench_model`)** collects decorated functions (`Bench` / `bench`) into `Case` objects. Parameter grids expand into concrete `VariantSpec` rows before execution.
+- **Runner (`pybench.runner`)** prepares each variant (calibration, warmup, repeats) and produces `VariantResult` objects with raw samples and derived statistics.
+- **Timing helpers (`pybench.timing`, `pybench.profiles`)** pick the right profile, budget, and sample counts; context mode measurements use `BenchContext` to isolate the timed region.
+- **Storage (`pybench.run_store`)** persists runs/baselines to `.pybenchx/` and exposes commands (`list`, `stats`, `clean`) used by the CLI.
+- **Reporters (`pybench.reporters.*`)** render tabular output, JSON/CSV/Markdown payloads, or interactive charts. They all consume the same normalized `Run` object.
+- **Compare (`pybench.compare`)** loads historical runs and computes deltas, including Mann–Whitney U significance tests and threshold enforcement (`--fail-on`).
 
-- `discover(paths)`: files or `**/*bench.py` under directories.
-- `load_module_from_path`: import file with a stable module name (`_module_name_for_path`).
-- `run(...)` pipeline:
-  1. Optional warmup per case.
-  2. `prepare_variants`: detects `BenchContext` usage and calibrates `n` per variant using `--budget`/`--max-n` (or "smoke").
-  3. Execute repeats via `run_single_repeat` and collect `VariantResult`s.
-  4. Filter, sort, and render table.
+## Data model
 
-## Shared utilities
+- `Case`: metadata attached to each decorated function (`name`, `group`, `mode`, `params`, `baseline`, etc.). Parameters are optional and copied per variant so mutation inside benchmarks is safe.
+- `VariantSpec`: the concrete combination of arguments derived from a `Case` after applying CLI overrides (`-P repeat=5`).
+- `VariantResult`: statistics and timing samples for a `VariantSpec`. Holds mean, `p75/p95/p99`, speedups versus baseline, and optional raw samples when exports are requested.
+- `Run`: the container saved to disk—includes metadata (profile, CLI args, git info when available) plus the list of `VariantResult`s.
 
-- `utils.fmt_time_ns` for human-readable time units.
-- `utils.percentile` for p75/p99/p995 interpolation.
-- `utils.compute_speedups` for group baseline comparison used by reporters.
+## From CLI to measurements
 
-## Calibration
+1. **Command parsing (`pybench.cli`)** handles `pybench run/list/stats/clean`. `run` builds a `RunnerConfig` combining CLI flags, default profile, and overrides.
+2. **Suite discovery** loads all requested modules, letting decorators register cases into the global `_ALL_BENCHES` registry.
+3. **Variant planning (`utils.prepare_variants`)** expands parameters, applies include/exclude filters (`-k`, `--group`), and detects whether `BenchContext` is used.
+4. **Calibration (`runner.calibrate_n`)** approximates how many loop iterations fit inside the profile budget, honoring `--budget`, `--max-n`, and `--min-time`.
+5. **Execution (`runner.run_single_repeat`)** performs warmups (unless disabled), repeatedly calls the benchmark, times it with `perf_counter_ns`, and records results. GC collection and optional `gc.freeze()` keep noise down.
+6. **Post-processing** sorts results, computes baselines (`suite_sig.choose_baseline`), and attaches speedup labels (`≈ same`, `faster`, `slower`).
+7. **Outputs** go to the terminal table plus any reporters requested via `--export`. When `--save`/`--save-baseline` are provided, the `Run` is serialized into `.pybenchx/` and future comparisons can reference it.
 
-- `calibrate_n(...)` grows `n` exponentially toward `target_ns` and refines with ±20% probes.
-- Context mode:
-  - If `BenchContext` is actually used (detected by a probe call), only the hot region is timed.
-  - Otherwise, the whole function is timed (same as function mode).
+## Profiles and calibration knobs
 
-## Accuracy & robustness
+Profiles are declared in `pybench.profiles`. Each contains default `repeat`, `warmup`, and a time budget per variant. The CLI can tweak runtime behavior:
 
-- Clock: `perf_counter_ns` when available.
-- GC: collect and disable around runs; CLI attempts `gc.freeze()` if present.
-- Warmup: executes untimed iterations to stabilize caches/CPU.
-- Percentiles: linear interpolation.
-- Colors: TTY-detected, opt-out with `--no-color`.
+- `--profile smoke|thorough|custom.json` selects built-ins or your own JSON profile.
+- `--budget` overrides the total target nanoseconds per variant; `--max-n` guards against runaway loops.
+- `--min-time` ensures even fast benchmarks run long enough to be meaningful.
+- `--sequential` forces single-thread execution even if we add parallel runners later.
 
-## Table & baseline
+Calibration seeds the function once to detect context usage. If `BenchContext` calls `start()/end()`, only that region is timed; otherwise, pybenchx falls back to full-function timing.
 
-- Groups are rendered with a dim header.
-- Baseline chosen by `baseline=True` or name heuristic (contains "baseline"/"base").
-- `vs base` shows `≈ same` when relative mean diff ≤ 1%.
+## Storage layout (`.pybenchx/`)
 
-## Exports and compare
+```
+.pybenchx/
+├── baselines/   # Named baselines saved via --save-baseline
+├── runs/        # Timestamped run artifacts saved via --save
+├── exports/     # Files generated by --export
+└── cache/       # Helper data (e.g., discovery cache) when enabled
+```
 
-- Export reports: `--export json|md|csv[:path]`.
-- Compare runs: `--compare BASELINE|PATH` with `--fail-on mean:%,p99:%` policies. P-values via Mann–Whitney U (approx). `p99` policy uses actual p99 delta.
+- `pybench list` reads these directories and surfaces human-friendly summaries.
+- `pybench stats` calculates disk usage, retention, and age so you know when to prune.
+- `pybench clean --keep N` keeps the newest N entries per category and deletes the rest safely.
+
+Artifacts are plain JSON (zstd-compressed when available). They can be inspected or checked into CI logs if desired.
+
+## Reporters and extending output
+
+Reporters live under `pybench/reporters/`. Every reporter implements a simple interface:
+
+```python
+class Reporter:
+    def render(self, run: Run, *, save_path: Path | None) -> None:
+        ...
+```
+
+- `_ansi` backs the CLI table (speedup badges, color heuristics).
+- `markdown`, `csv`, and `json` emit static artifacts.
+- `chart` builds an HTML/JS bundle powered by Chart.js for interactive inspection.
+
+Adding a reporter usually means serializing `Run` and emitting to `save_path` (defaulting under `.pybenchx/exports/`).
+
+## Comparing runs
+
+`pybench compare` and `pybench run --compare` rely on `compare.py`:
+
+- Loads baseline run(s) from disk or from a path supplied on the command line.
+- Aligns variants by suite signature (name/group/params) so renames are detected early.
+- Computes deltas for mean and percentiles, then performs a Mann–Whitney U test for significance.
+- Applies thresholds from `--fail-on`; if a metric exceeds its budget, the command exits non-zero to gate CI.
+
+Quick comparisons (`--vs main|last`) defer to `run_store` helpers that resolve the baseline name inside `.pybenchx/baselines/`.
+
+## Utilities worth knowing
+
+- `pybench.utils` bundles formatting helpers (`fmt_time_ns`, `fmt_speedup`), percentile math, and environment detection.
+- `pybench.params` implements cartesian expansion and CLI override plumbing.
+- `pybench.suite_sig` produces deterministic identifiers for groups/cases so history remains aligned even as code moves around.
+
+Understanding these modules makes it easier to extend pybenchx—for example, adding new CLI flags, tuning calibration logic, or teaching reporters to emit bespoke dashboards.

@@ -2,26 +2,51 @@
 title: Behavior
 ---
 
-How pybenchx runs and measures.
+How pybenchx runs, measures, and keeps noise in check.
 
 ## Profiles
 
-Profiles control repeat counts and calibration budget.
+Profiles define repeat counts, warmup passes, and the calibration budget per variant.
 
-- thorough: ~1s per variant, `repeat=30`
-- smoke (default): no calibration, `repeat=3`, `warmup=0`
+| profile  | repeat | warmup | calibration | best for |
+| ---      | ---    | ---    | ---         | ---      |
+| smoke    | 3      | 0      | off         | quick iteration during development |
+| thorough | 30     | 2      | ~1 s/variant | pre-merge validation, CI checks |
 
-Tip: use `--profile smoke` while iterating; switch to `--profile thorough` when publishing.
+Use `--profile smoke` while exploring; switch to `--profile thorough` (or a custom JSON profile) when you want stable numbers.
 
-## Calibration
+### Custom tuning knobs
 
-- Calibration grows `n` to hit a target budget per variant (split across repeats).
-- In context mode, if `BenchContext` is actually used, only the hot section is measured.
+- `--budget 50ms` sets the target time per variant across repeats.
+- `--max-n 1_000_000` caps the number of loop iterations.
+- `--min-time 2ms` enforces a floor so fast functions still run long enough.
+- `--repeat`/`--warmup` override profile settings for quick what-if experiments.
+
+Profiles live in `pybench/profiles.py`; they are simple dataclasses, so shipping a new profile boils down to adding a JSON file with the same fields.
+
+## Calibration and timing pipeline
+
+- `calibrate_n` runs the benchmark in small bursts, growing `n` exponentially until the target budget is met. A refinement step probes ±20% to avoid overshooting.
+- Context mode calls the benchmark once to detect whether `BenchContext.start()/end()` is used; if not, pybenchx reverts to whole-function timing.
+- Warmups run before sampling (unless disabled with `--no-warmup`) to warm caches and JITs.
+- Each repeat wraps the tight loop with `perf_counter_ns` (or `perf_counter` as a fallback) for precise timings.
+- Raw samples feed percentile calculations (`p50/p75/p95/p99`) via linear interpolation.
 
 ## Accuracy & robustness
 
-- Monotonic high-resolution clock (`perf_counter` / `_ns`).
-- GC is collected and may be disabled during measurement for stability.
-- Warmup runs help steady state.
-- Percentiles use linear interpolation.
-- Colors only on TTY; `--no-color` turns them off.
+- **Clock** – monotonic, high-resolution (`perf_counter_ns` on Python ≥3.7).
+- **GC** – the runner performs `gc.collect()` before measurements and may freeze GC during timed sections (Python ≥3.11) to reduce pauses.
+- **Environment** – colors only print on TTY; use `--no-color` in CI logs. The CLI also respects `PYBENCH_DISABLE_GC` when you want to opt out of GC tweaks entirely.
+- **Noise hints** – the table highlights outliers (`p99` vs mean) so you can spot unstable cases quickly.
+
+## Error handling and exits
+
+- Exceptions inside benchmarks bubble up with context; failing cases never poison other variants.
+- `--fail-fast` stops the run on the first error.
+- `--fail-on mean:7%,p99:12%` applies thresholds during comparisons and exits non-zero when budgets are exceeded—ideal for CI.
+
+## Reporting highlights
+
+- The CLI table groups benchmarks by `group` and annotates baselines with a star (★).
+- `≈ same` shows up when the relative mean differs by ≤1% and the statistical test agrees.
+- All reporters consume the same `Run` object; adding a format is as easy as implementing a new reporter class.

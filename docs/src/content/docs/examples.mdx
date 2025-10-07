@@ -40,18 +40,88 @@ def join_param(n: int, sep: str):
 ## Running
 
 ```bash
-pybench examples/ --profile smoke     # default
-pybench examples/ --profile thorough  # heavier runs
+pybench run examples/ --profile smoke     # default
+pybench run examples/ --profile thorough  # heavier runs
 ```
 
 ## Save, export, compare (quick tour)
 
 ```bash
-pybench examples/ --save latest
-pybench examples/ --save-baseline main
-pybench examples/ --export json:run.json
-pybench examples/ --compare main --fail-on mean:5%,p99:10%
+pybench run examples/ --save latest
+pybench run examples/ --save-baseline main
+pybench run examples/ --export json:run.json
+pybench run examples/ --export chart:run.html
+pybench run examples/ --compare main --fail-on mean:5%,p99:10%
 ```
+
+## Daily CLI workflow
+
+```bash
+# 1. Quick smoke check while iterating on code
+pybench run src/benchmarks --profile smoke --vs main
+
+# 2. Heavier pass before merging
+pybench run src/benchmarks --profile thorough --save latest
+
+# 3. Gate the PR with thresholds (CI)
+pybench run src/benchmarks --compare main --fail-on mean:7%,p99:12%
+```
+
+- Use `--vs main` (or `--vs last`) for an immediate sanity check against your saved baseline.
+- When CI runs, combine `--save` and `--export markdown:report.md` to surface artifacts in build logs or PR comments.
+
+## Budget tuning and overrides
+
+```bash
+# Keep each variant below ~50 ms total, but never exceed 1e6 iterations
+pybench run examples/ --budget 50ms --max-n 1_000_000
+
+# Force at least 2 ms of runtime even for super-fast functions
+pybench run examples/ --min-time 2ms
+
+# Override case parameters without editing the source file
+pybench run examples/ -k join -P n=100_000 -P repeat=20
+```
+
+Budgets are especially helpful with larger suites. pybenchx auto-calibrates `n`, but these guardrails keep the tool responsive and prevent runaway loops.
+
+## Working with history
+
+```bash
+pybench list        # summarize saved runs and baselines
+pybench stats       # disk usage, age, retention recommendations
+pybench clean --keep 5
+```
+
+- Runs live in `.pybenchx/runs/`; baselines live in `.pybenchx/baselines/`.
+- `clean` keeps the newest N artifacts per category and deletes the rest.
+- You can delete `.pybenchx/` entirely to start fresh—pybenchx recreates it on the next run.
+
+## Turning runs into reports
+
+```bash
+pybench run examples/ --export markdown:bench.md --export csv:bench.csv
+pybench run examples/ --export chart:web/bench.html
+```
+
+Markdown exports summarize speedups and percentiles—great for PRs. CSV/JSON are machine-friendly, while the chart reporter bundles an interactive Chart.js dashboard you can open locally or serve with docs.
+
+## Automating in CI
+
+```yaml
+- name: Benchmark
+    run: |
+        pybench run benchmarks/ --profile thorough --save latest \
+            --compare main --fail-on mean:5%,p99:10% \
+            --export markdown:bench.md
+- name: Upload artifact
+    uses: actions/upload-artifact@v4
+    with:
+        name: bench-report
+        path: .pybenchx/exports/bench.md
+```
+
+This recipe keeps the smoke-test posture locally, but enforces stricter `thorough` runs in CI. If regressions exceed the threshold, the job fails. The exported Markdown report becomes a reviewer-friendly artifact.
 
 ## Markdown report sample
 
@@ -65,3 +135,4 @@ When you `--export md`, you get a compact table ready for PRs and docs:
 
 - “≈ same” appears when mean differs ≤ 1% vs the group baseline.
 - Use `baseline=True` on one case per group to anchor comparisons.
+- Percentiles come from recorded samples; export JSON if you want raw data for custom dashboards.

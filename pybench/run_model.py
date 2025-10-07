@@ -1,13 +1,14 @@
-# Placeholder schema definitions for future implementation.
-# This module defines the JSON-serializable "Run" model and helpers.
+"""Serializable data structures representing benchmark run outputs."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class StatSummary:
+    """Aggregate statistics for a variant repeat set."""
     mean: float
     median: float
     stdev: float
@@ -20,23 +21,25 @@ class StatSummary:
 
 @dataclass
 class VariantResult:
+    """Measured results for a concrete benchmark variant."""
     name: str
     group: str
     n: int
     repeat: int
     baseline: bool
     stats: StatSummary
-    samples_ns: Optional[List[float]] = None
+    samples_ns: list[float] | None = None
 
 
 @dataclass
 class RunMeta:
+    """Metadata captured once per benchmark run."""
     tool_version: str
     started_at: str
     duration_s: float
-    profile: Optional[str]
-    budget_ns: Optional[int]
-    git: Dict[str, Any]
+    profile: str | None
+    budget_ns: int | None
+    git: dict[str, Any]
     python_version: str
     os: str
     cpu: str
@@ -46,9 +49,10 @@ class RunMeta:
 
 @dataclass
 class Run:
+    """Logical grouping of metadata and variant results."""
     meta: RunMeta
     suite_signature: str
-    results: List[VariantResult] = field(default_factory=list)
+    results: list[VariantResult] = field(default_factory=list)
 
 
 __all__ = [

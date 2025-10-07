@@ -24,7 +24,13 @@ export default defineConfig({
         { label: 'Behavior & Accuracy', link: '/behavior' },
         {
           label: 'API Reference',
-          items: [{ label: 'bench / Bench / BenchContext', link: '/api' }]
+          items: [
+            { label: 'Overview', link: '/api' },
+            { label: 'Decorators & Suites', link: '/api/decorators' },
+            { label: 'BenchContext & Runner', link: '/api/context' },
+            { label: 'Runs, Storage & Compare', link: '/api/storage' },
+            { label: 'Reporters & Exports', link: '/api/reporters' }
+          ]
         },
         { label: 'Examples & Cookbook', link: '/examples' },
         { label: 'Internals', link: '/internals' },

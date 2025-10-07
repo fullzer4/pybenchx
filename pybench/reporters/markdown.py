@@ -1,14 +1,18 @@
+"""Render benchmark runs as GitHub-flavored Markdown tables."""
+
 from __future__ import annotations
 
-from typing import Dict, List
-
-from ..run_model import Run, VariantResult
-from ..utils import fmt_time_ns, compute_speedups
+from ..run_model import Run
+from ..utils import compute_speedups, fmt_time_ns
 
 
 def render(run: Run, *, include_pvalues: bool = False) -> str:
+    """Return a Markdown table describing the run."""
     headers = ["group", "benchmark", "time (avg)", "p99", "vs base"]
-    lines = ["| " + " | ".join(headers) + " |", "|" + "|".join([" --- "] * len(headers)) + "|"]
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "|" + "|".join([" --- "] * len(headers)) + "|",
+    ]
     sp = compute_speedups(run.results)
     for r in run.results:
         name = r.name + ("  ★" if r.baseline else "")

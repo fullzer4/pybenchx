@@ -1,0 +1,135 @@
+---
+title: BenchContext & Runner
+---
+
+Dig into the lower-level timing primitives and execution helpers that power the CLI. Use these surfaces when you need to embed pybenchx in other tooling or build custom harnesses.
+
+## `BenchContext`
+
+```python
+from pybench import BenchContext
+```
+
+`BenchContext` lives in `pybench.timing`. It provides precise per-iteration timing by letting you wrap just the hot region of your benchmark.
+
+### Contract
+
+- `start()` begins timing the region if it is not already running.
+- `end()` stops timing and accumulates the elapsed nanoseconds.
+- `_reset()` clears internal state (pybenchx calls it automatically between iterations).
+- `_elapsed_ns()` returns the recorded nanoseconds (used internally for calibration and measurement).
+
+Call `start()`/`end()` exactly once per iteration. Nested calls are ignored; the context silently no-ops if you double-start or double-end.
+
+```python
+from pybench import bench, BenchContext
+
+@bench(name="with-context")
+def with_context(b: BenchContext):
+    data = list(range(10_000))
+    b.start()
+    sum(data)
+    b.end()
+```
+
+If you forget to call `start()`, pybenchx falls back to timing the entire function so your benchmark still produces results (but you lose the isolation benefits).
+
+## Calibration helpers
+
+`pybench.runner` exposes functions used by the CLI. They are safe to call directly when you need exact control.
+
+### `calibrate_n(func, mode, args, kwargs, *, target_ns=..., max_n=...)`
+
+- Returns `(n, used_ctx)` where `n` is the recommended loop count per repeat.
+- Targets `target_ns` total runtime by exponentially growing `n` and refining around the estimate.
+- Detects whether the benchmark actually used `BenchContext` so the runner knows whether to treat it as context or function mode later.
+
+### `detect_used_ctx(func, args, kwargs)`
+
+Probes a context-mode function once to see if `start()/end()` recorded any time. Useful when you need to branch logic depending on whether the context is truly used.
+
+### `run_single_repeat(case, vname, vargs, vkwargs, used_ctx=False, local_n=None)`
+
+- Executes a single calibrated repeat and returns the mean nanoseconds per iteration.
+- Honors context mode (when `used_ctx` is `True`, only the wrapped region contributes to the result).
+
+### `run_case(case)`
+
+Simplest entrypoint: runs warmups, calibrates each variant, and returns a list of mean timings (one per variant). Perfect for quick scripts or debugging.
+
+### `execute_case(...)`
+
+The full-featured API backing the CLI.
+
+```python
+from pybench.runner import execute_case
+from pybench.profiles import DEFAULT_BUDGET_NS
+
+variants = execute_case(
+    case,
+    budget_ns=DEFAULT_BUDGET_NS,
+    max_n=1_000_000,
+    smoke=False,
+    profile="thorough",
+    parallel=False,
+)
+```
+
+Parameters:
+
+- `budget_ns`: time budget split across repeats (overrides profile defaults).
+- `max_n`: safety net for runaway loops.
+- `smoke`: skip calibration entirely when `True` (useful for fast iteration).
+- `profile`: determines whether raw samples are stored (used by reporters that need per-repeat data).
+- `parallel`: run variants in a thread pool when you have many parameter combinations.
+- `kw`: optional substring filter applied to variant names (same as `-k` in the CLI).
+
+### `execute_case_sequential` / `execute_case_parallel`
+
+Convenience wrappers that match `execute_case`’s signature when you explicitly want sequential or parallel execution.
+
+### `run_warmup(case, kw=None)`
+
+Pre-runs a case without recording samples. Handy when you want to prime caches or test that all parameter combinations execute without raising exceptions.
+
+## Building your own runner
+
+Combine the pieces above to embed pybenchx inside other systems.
+
+```python
+from pybench import Bench
+from pybench.runner import execute_case
+from pybench.run_model import Run, RunMeta
+from pybench.run_store import save_run
+
+suite = Bench("custom")
+
+@suite.bench(name="baseline", baseline=True)
+def baseline():
+    sum(range(10_000))
+
+case = suite.cases[0]
+variants = execute_case(case, budget_ns=None, max_n=250_000, smoke=True, profile="smoke")
+
+run = Run(
+    meta=RunMeta(
+        tool_version="dev",
+        started_at="2025-10-07T00:00Z",
+        duration_s=0.0,
+        profile="smoke",
+        budget_ns=None,
+        git={},
+        python_version="3.11",
+        os="linux",
+        cpu="",
+        perf_counter_resolution=0.0,
+        gc_enabled=True,
+    ),
+    suite_signature="custom",
+    results=variants,
+)
+
+save_run(run, label="dev-test")
+```
+
+Fill in real metadata (timestamps, git info, CPU details) if you plan to persist runs; the CLI’s `pybench.cli.run()` function shows exactly how those fields are assembled before saving.

@@ -1,5 +1,4 @@
-# Suite signature computation based on case definitions.
-# Produces a stable hash from (case.name, group, params schema).
+"""Generate stable suite signatures derived from case definitions."""
 
 from __future__ import annotations
 
@@ -8,7 +7,7 @@ from typing import Iterable
 
 
 def _case_fingerprint(c: object) -> str:
-    # Lazy attribute access to avoid importing core here.
+    """Return a normalized string fingerprint for a case-like object."""
     name = getattr(c, "name", "?")
     group = getattr(c, "group", None)
     params = getattr(c, "params", None)
@@ -18,8 +17,8 @@ def _case_fingerprint(c: object) -> str:
         if not p:
             return ""
         items = []
-        for k in sorted(p.keys()):  # type: ignore[attr-defined]
-            vals = list(p[k])  # type: ignore[index]
+        for k in sorted(p.keys()):
+            vals = list(p[k])
             vals_s = ",".join(sorted(repr(v) for v in vals))
             items.append(f"{k}=[{vals_s}]")
         return ";".join(items)
@@ -28,6 +27,7 @@ def _case_fingerprint(c: object) -> str:
 
 
 def suite_signature_from_cases(cases: Iterable[object]) -> str:
+    """Compute a deterministic hash representing a set of cases."""
     h = hashlib.sha1()
     fps = sorted(_case_fingerprint(c) for c in cases)
     for fp in fps:

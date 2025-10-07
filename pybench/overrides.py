@@ -1,11 +1,14 @@
+"""Parameter override parsing helpers used by the CLI."""
+
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from .bench_model import Case
 
 
 def _parse_value(v: str) -> Any:
+    """Coerce string CLI values into Python literals when possible."""
     s = v.strip()
     if s.lower() in {"true", "false"}:
         return s.lower() == "true"
@@ -18,13 +21,17 @@ def _parse_value(v: str) -> Any:
         return float(s)
     except Exception:
         pass
-    if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+    if (
+        (s.startswith("'") and s.endswith("'"))
+        or (s.startswith('"') and s.endswith('"'))
+    ):
         return s[1:-1]
     return s
 
 
-def parse_overrides(pairs: list[str]) -> Dict[str, Any]:
-    overrides: Dict[str, Any] = {}
+def parse_overrides(pairs: list[str]) -> dict[str, Any]:
+    """Convert ``key=value`` strings into a mapping of overrides."""
+    overrides: dict[str, Any] = {}
     for p in pairs:
         if "=" not in p:
             continue
@@ -33,7 +40,8 @@ def parse_overrides(pairs: list[str]) -> Dict[str, Any]:
     return overrides
 
 
-def apply_overrides(case: Case, overrides: Dict[str, Any]) -> Case:
+def apply_overrides(case: Case, overrides: dict[str, Any]) -> Case:
+    """Return a new :class:`Case` with CLI overrides applied."""
     if not overrides:
         return case
     c = Case(

@@ -6,25 +6,25 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Downloads](https://static.pepy.tech/badge/pybenchx)](https://pepy.tech/project/pybenchx)
 
-Measure small, focused snippets with minimal boilerplate, auto-discovery, smart calibration, and a clean CLI (command: `pybench`).
+Measure small, focused snippets with minimal boilerplate, auto-discovery, smart calibration, and a clean CLI (`pybench`).
 
 Run benchmarks with one command:
 
 ```bash
-pybench examples/ [-k keyword] [-P key=value ...]
+pybench run examples/ [-k keyword] [-P key=value ...]
 ```
 
 ## ✨ Highlights
 
-- Simple API: `@bench(...)` or suites with `Bench` and `BenchContext.start()/end()` para regiões críticas.
-- Auto-discovery: `pybench <dir>` expande `**/*bench.py`.
-- Parametrização: gere casos via `params={...}` (produto cartesiano) ou por caso com `args/kwargs`.
-- Ajustes em runtime: `-P key=value` sobrescreve `n`, `repeat`, `warmup`, `group` e parâmetros custom.
-- Timing sólido: clock monotônico, controle de GC, warmup, repeats, fast-path de contexto.
-- Calibração esperta: por variante para atingir um budget de tempo.
-- Tabela bonita: colunas alinhadas, percentis, iter/s, min…max, baseline e speedup vs. base.
-- Cores sensíveis a TTY: `--no-color` para ambientes plain.
-- Run management: save runs, baselines, compare and export (JSON/Markdown/CSV).
+- Simple API: use the `@bench(...)` decorator or suites with `Bench` + `BenchContext.start()/end()` to isolate the hot path.
+- Auto-discovery: `pybench run <dir>` expands to `**/*bench.py`.
+- Powerful parameterization: generate Cartesian products with `params={...}` or define per-case `args/kwargs`.
+- On-the-fly overrides: `-P key=value` adjusts `n`, `repeat`, `warmup`, `group`, or custom params without editing code.
+- Solid timing model: monotonic clock, warmup, GC control, and context fast-paths.
+- Smart calibration: per-variant iteration tuning to hit a target budget.
+- Rich reports: aligned tables with percentiles, iter/s, min…max, baseline markers, and speedups vs. base.
+- HTML charts: export benchmarks as self-contained Chart.js dashboards with `--export chart`.
+- History tooling: runs auto-save to `.pybenchx/`; list, inspect stats, clean, or compare with `--vs {name,last}`.
 
 ## 🚀 Quickstart
 
@@ -62,43 +62,62 @@ def join_baseline(b: BenchContext):
 
 - Run all examples
   ```bash
-  pybench examples/
+  pybench run examples/
   ```
 - Filter by name
   ```bash
-  pybench examples/ -k join
+  pybench run examples/ -k join
   ```
 - Override params at runtime
   ```bash
-  pybench examples/ -P repeat=5 -P n=10000
+  pybench run examples/ -P repeat=5 -P n=10000
   ```
 
 ### 🎛️ Key CLI options
 
 - Disable color
   ```bash
-  pybench examples/ --no-color
+  pybench run examples/ --no-color
   ```
 - Sorting
   ```bash
-  pybench examples/ --sort time --desc
+  pybench run examples/ --sort time --desc
   ```
 - Time budget per variant (calibration)
   ```bash
-  pybench examples/ --budget 300ms     # total per variant; split across repeats
-  pybench examples/ --max-n 1000000    # cap calibrated n
+  pybench run examples/ --budget 300ms     # total per variant; split across repeats
+  pybench run examples/ --max-n 1000000    # cap calibrated n
   ```
 - Profiles
   ```bash
-  pybench examples/ --profile thorough  # ~1s budget, repeat=30
-  pybench examples/ --profile smoke     # no calibration, repeat=3 (default)
+  pybench run examples/ --profile thorough  # ~1s budget, repeat=30
+  pybench run examples/ --profile smoke     # no calibration, repeat=3 (default)
   ```
 - Save / Compare / Export
   ```bash
-  pybench examples/ --save latest
-  pybench examples/ --save-baseline main
-  pybench examples/ --compare main --fail-on mean:7%,p99:12%
-  pybench examples/ --export md:bench.md   # or json:run.json, csv:bench.csv
+  pybench run examples/ --save latest
+  pybench run examples/ --save-baseline main
+  pybench run examples/ --compare main --fail-on mean:7%,p99:12%
+  pybench run examples/ --export chart        # HTML dashboard (Chart.js)
+  pybench run examples/ --export json         # JSON next to auto-saved run
+  ```
+
+### 🗂️ Manage history & baselines
+
+- List everything under `.pybenchx/`
+  ```bash
+  pybench list
+  pybench list --baselines
+  ```
+- Storage stats & cleanup
+  ```bash
+  pybench stats
+  pybench clean --keep 50
+  ```
+- Compare quickly
+  ```bash
+  pybench run examples/ --vs main        # named baseline
+  pybench run examples/ --vs last        # last auto-saved run
   ```
 
 ### 📊 Output
@@ -106,7 +125,7 @@ def join_baseline(b: BenchContext):
 Header includes CPU, Python, perf_counter clock info, total time, and profile. Table shows speed vs baseline with percent:
 
 ```
-(pybench) $ pybench examples/
+(pybench) $ pybench run examples/
 cpu: x86_64
 runtime: python 3.13.5 (x86_64-linux) | perf_counter: res=1.0e-09s, mono=True
 time: 23.378s | profile: smoke, budget=-, max-n=1000000, sequential

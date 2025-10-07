@@ -2,80 +2,39 @@
 title: API Reference
 ---
 
-## Decorator: `bench(**opts)`
+## Quick map
 
-Register a function as a benchmark case.
+| Area | What you get | Docs |
+| --- | --- | --- |
+| Decorators & suites | `bench`, `Bench`, parameter grids, grouping | [Decorators & Suites](/api/decorators) |
+| BenchContext & runner | Manual timing, calibration knobs, execution helpers | [BenchContext & Runner](/api/context) |
+| Runs & storage | `Run` data model, `.pybenchx/` helpers, compare utilities | [Runs, Storage & Compare](/api/storage) |
+| Reporters & exports | Table rendering, JSON/CSV/Markdown/Chart reporters, extending output | [Reporters & Exports](/api/reporters) |
 
-Options:
-- name: case name
-- params: dict[str, list] to generate variants (cartesian product)
-- args/kwargs: fixed positional/keyword arguments
-- n: iterations per repeat (default 100)
-- repeat: number of repeats (default 20)
-- warmup: warmup repeats (default 2)
-- group: table group name
-- baseline: mark case as baseline for its group
+## Module overview
 
-Modes:
-- function mode: time the whole call
-- context mode: first parameter is `BenchContext`; only the region between `start()` and `end()` is measured
+- `pybench.bench_model`: dataclasses (`Case`, `Bench`, `bench`) powering the decorator workflow.
+- `pybench.timing`: `BenchContext` plus the monotonic clock wrapper.
+- `pybench.runner`: calibration/measurement engine used by the CLI and available for advanced integrations.
+- `pybench.run_model`: serializable run outputs (`Run`, `VariantResult`, `StatSummary`).
+- `pybench.run_store`: helpers for listing, loading, and pruning `.pybenchx/` history.
+- `pybench.reporters`: output backends (ANSI table, Markdown, CSV, JSON, Chart.js).
+- `pybench.utils` / `pybench.params`: supporting utilities (formatting, percentile math, parameter expansion).
 
-Example:
-```python
-from pybench import bench, BenchContext
+Each module exports its public surface via `__all__`. If an object is not listed there, we consider it internal and subject to change.
 
-@bench(name="join")
-def join(sep: str = ","):
-    sep.join(str(i) for i in range(100))
-
-@bench(name="concat", n=1000, repeat=10)
-def concat(b: BenchContext):
-    s = ""; b.start()
-    for i in range(100): s += str(i)
-    b.end()
-```
-
-## Class: `Bench(suite_name=None, *, group=None)`
-
-Create a suite; use `suite.bench(...)` to group cases and define a baseline.
+## Import styles
 
 ```python
-from pybench import Bench, BenchContext
-
-suite = Bench("strings")
-
-@suite.bench(name="join-baseline", baseline=True)
-def base(b: BenchContext):
-    ...
+from pybench import bench, Bench, BenchContext
+from pybench.runner import execute_case
+from pybench.run_store import save_run, load_baseline
 ```
 
-Notes:
-- `group` default is `suite_name` (unless it is "bench"/"default").
-- Use multiple suites to structure a large project.
+The package root intentionally re-exports only the decorator workflow. Reach into submodules when you need lower-level control (custom runners, storage automation, reporters).
 
-## Class: `BenchContext`
+## Versioning policy
 
-- `start()` / `end()`: mark the critical section
-- Resets automatically each iteration during measurement
-- Prefer this mode when setup dominates per-iteration cost
+pybenchx follows semver. Public APIs documented in this section remain stable within a major version. Expect additive changes (new parameters, dataclass fields) in minor releases; breaking changes only land in majors.
 
-## Results
-
-Data model:
-- Run(meta, suite_signature, results: list[VariantResult])
-- VariantResult(name, group, n, repeat, baseline, stats, samples_ns)
-- StatSummary(mean, median, stdev, min, max, p75, p99, p995)
-
-The rendered table adds:
-- iter/s: derived from mean
-- vs base: `baseline`, `≈ same` (≤1% diff), `x× faster/slower`
-
-## Parameterization patterns
-
-```python
-@bench(name="op", params={"n": [10, 100], "sep": ["-", ":"]})
-def op(n: int, sep: str):
-    sep.join(str(i) for i in range(n))
-```
-
-You can also keep `params` and override at runtime with `-P sep=":"`.
+Looking for implementation notes or extension guides? See [Internals](/internals) for architecture details and [Contributing](/contributing) for development workflows.

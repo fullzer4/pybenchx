@@ -1,0 +1,135 @@
+---
+title: Runs, Storage & Compare
+---
+
+Understand the data structures pybenchx produces and how to work with the `.pybenchx/` storage layout programmatically.
+
+## Run data model
+
+Objects live in `pybench.run_model`.
+
+```python
+from pybench.run_model import Run, RunMeta, VariantResult, StatSummary
+```
+
+- `RunMeta`: metadata captured once per invocation (`tool_version`, `started_at`, durations, profile, git info, environment strings, GC state).
+- `VariantResult`: per-benchmark statistics plus optional raw samples.
+- `StatSummary`: aggregate metrics (mean/median/stdev/min/max/p75/p99/p995).
+- `Run`: the container saved to disk; it binds `RunMeta`, the suite signature, and a list of `VariantResult` instances.
+
+All dataclasses are serializable with `dataclasses.asdict`. Reporters and the storage layer rely on that contract.
+
+### Suite signatures
+
+`suite_signature` is produced by `pybench.suite_sig.suite_signature_from_cases`. It hashes the loaded cases to detect when you rename or remove benchmarks across runs. Keep it if you want robust comparisons.
+
+## Storage helpers
+
+`pybench.run_store` centralizes reading and writing `.pybenchx/` artifacts.
+
+```python
+from pathlib import Path
+from pybench.run_store import (
+    get_root,
+    save_run,
+    save_baseline,
+    load_run,
+    load_baseline,
+    list_recent_runs,
+    list_baselines,
+    clean_old_runs,
+    get_storage_stats,
+    default_export_path,
+)
+```
+
+### Root discovery
+
+- `get_root(base=None)` returns the resolved `.pybenchx/` directory (creating it when missing).
+- `ensure_dirs(root)` mirrors the directory bootstrap the CLI uses; normally `get_root` already calls it for you.
+
+Directory layout:
+
+```
+.pybenchx/
+├── runs/        # Timestamped history (auto-saved and labeled runs)
+├── baselines/   # Named JSON baselines
+├── exports/     # Reporter outputs (markdown/csv/json/chart/...)
+└── exports/chart/
+```
+
+A README is auto-generated to help teammates understand the folder if it ends up in version control.
+
+### Saving runs
+
+- `save_run(run, label=None)` stores the JSON representation under `runs/` using a timestamped filename (`<ts>_<branch>@<sha>.<profile>.json`).
+- `save_baseline(run, name)` stores the run as `<name>.json` under `baselines/`.
+- `auto_save_run(run)` mirrors the CLI behavior and is called after every execution; labeled runs are never deleted by `clean_old_runs`.
+
+### Loading and listing
+
+- `load_run(path)` loads a run from disk and reconstructs `RunMeta`, `VariantResult`, and `StatSummary` objects.
+- `load_baseline(name_or_path)` resolves either a named baseline in `.pybenchx/baselines` or a direct path.
+- `list_recent_runs(limit=10)` returns `Path` objects sorted by modification time.
+- `list_baselines()` returns sorted baseline names.
+- `get_latest_run()` grabs the freshest auto-saved run.
+
+### Housekeeping
+
+- `clean_old_runs(keep=100)` deletes the oldest auto-saved runs, preserving labeled artifacts and the newest `keep` history entries.
+- `get_storage_stats()` reports counts, disk usage, and age bounds for both runs and baselines—great for CLI status commands or dashboards.
+
+### Export paths
+
+`default_export_path(run, fmt, base_name=None)` returns the location reporters use by default. Formats map to:
+
+| Spec | Directory | Extension |
+| --- | --- | --- |
+| `json` | `.pybenchx/exports/json/` | `.json` |
+| `md`/`markdown` | `.pybenchx/exports/markdown/` | `.md` |
+| `csv` | `.pybenchx/exports/csv/` | `.csv` |
+| `chart` | `.pybenchx/exports/chart/` | `.html` |
+
+Pass a `base_name` if you want deterministic filenames (otherwise the run’s timestamp-based stem is used).
+
+## Comparing runs programmatically
+
+The CLI surfaces `pybench compare` and `--compare/--vs`. Underneath lives `pybench.compare`:
+
+```python
+from pybench.compare import diff, parse_fail_policy, violates_policy
+```
+
+- `diff(current_run, baseline_run, alpha=0.05)` returns a `DiffReport` with per-variant deltas, p-values, and a `suite_changed` flag when the benchmark lineup differs.
+- `parse_fail_policy("mean:5%,p99:10%")` converts the CLI string into a dictionary for enforcement.
+- `violates_policy(report, policy)` returns `True` when a regression exceeds your thresholds (and is statistically significant).
+
+Combine them with `pybench.run_store.load_baseline()` to implement custom regression gates.
+
+```python
+from pybench.compare import diff, parse_fail_policy, violates_policy
+
+baseline_name, baseline = load_baseline("main")
+report = diff(current_run, baseline)
+policy = parse_fail_policy("mean:5%,p99:10%")
+
+if violates_policy(report, policy):
+    raise SystemExit("regression detected")
+```
+
+## Working with reporters
+
+Reporters consume `Run` objects and optionally write to disk.
+
+```python
+from pybench.reporters.table import render_table
+from pybench.reporters.json import render_json
+```
+
+Each reporter exports a `render_*` function (or a `Reporter` class) that takes a `Run` plus configuration such as the export path. See [Reporters & Exports](/api/reporters) for the full list and extension points.
+
+## Suggested workflows
+
+- Persist nightly baselines by calling `save_baseline(run, "main")` after CI passes.
+- Build dashboards by loading runs from `.pybenchx/runs/` and uploading the JSON to your metrics system.
+- Enforce regression thresholds in custom scripts by calling `compare_runs` and exiting with a non-zero code when a policy fails.

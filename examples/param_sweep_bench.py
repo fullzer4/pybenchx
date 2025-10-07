@@ -1,21 +1,31 @@
-from pybench import bench, BenchContext
+"""Param sweep example benches used in documentation."""
 
-# Synthetic param sweep: 4 * 5 = 20 variants for a single case; duplicate 4 times => 80 variants
-
-@bench(name="param_sweep", n=1, repeat=10, params={"a": [0, 1, 2, 3], "b": [0, 1, 2, 3, 4]})
-def param_sweep(a: int, b: int):
-    # tiny work proportional to (a+b)
-    s = 0
-    for _ in range((a + b) % 7 + 1):
-        s += _
-    return s
+from pybench import BenchContext, bench
 
 
-# Context mode baseline and variant
+@bench(
+    name="param_sweep",
+    n=1,
+    repeat=10,
+    params={"a": [0, 1, 2, 3], "b": [0, 1, 2, 3, 4]},
+)
+def param_sweep(a: int, b: int) -> int:
+    """Tiny workload proportional to the sum of two parameters."""
+    total = 0
+    for value in range((a + b) % 7 + 1):
+        total += value
+    return total
+
+
 @bench(name="baseline", baseline=True, n=1, repeat=10)
-def baseline(b: BenchContext):
-    b.start(); b.end()
+def baseline(ctx: BenchContext) -> None:
+    """Minimal baseline benchmark using context mode."""
+    ctx.start()
+    ctx.end()
+
 
 @bench(name="variant", n=1, repeat=10)
-def variant(b: BenchContext):
-    b.start(); b.end()
+def variant(ctx: BenchContext) -> None:
+    """Variant benchmark mirroring the baseline for comparison."""
+    ctx.start()
+    ctx.end()

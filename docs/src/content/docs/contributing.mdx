@@ -7,4 +7,42 @@ We follow the Contributor Covenant 2.1.
 - Repo: https://github.com/fullzer4/pybenchx
 - Issues: https://github.com/fullzer4/pybenchx/issues
 
-See the repo-level `CONTRIBUTING.md` for development setup (Nix/uv), running tests, and PR guidelines.
+## Quick start
+
+1. Clone the repo and install `uv` (or enable the provided Nix shell).
+2. Create a virtual environment with `uv sync` or `uv pip install -e .[dev]`.
+3. Run the full check suite before opening a PR:
+
+	```bash
+	ruff check .
+	pytest
+	```
+
+`uv` pins dependencies in `uv.lock`; update both `pyproject.toml` and `uv.lock` if you add packages. The Nix shell bundles Ruff, pytest, and Python toolchains for consistent CI parity.
+
+## What makes a great contribution
+
+- **Focused benchmarks** – new examples that illustrate profiling patterns or regression stories are welcome.
+- **Reporters and storage** – extend output formats, add knobs to `run_store`, or improve `.pybenchx/` ergonomics.
+- **Docs** – if something tripped you up, improve the page or add an FAQ entry. Small clarifications are incredibly helpful to new users.
+
+Before implementing large features, open an issue so we can make sure it aligns with pybenchx’s scope (fast iteration, simple CLI, actionable reports).
+
+## Running docs locally
+
+The docs site is an Astro project. From `docs/` run:
+
+```bash
+npm install
+npm run dev
+```
+
+Bump MDX or content, then open http://localhost:4321 to preview changes. Use `npm run lint` for content checks when modifying multiple pages.
+
+## Ground rules
+
+- Follow the existing code style; we rely on Ruff for linting/formatting.
+- Add or update tests when behavior changes—especially for CLI flags and reporters.
+- Keep benchmarks deterministic: provide seedable data and avoid sleeping or network calls.
+
+See the repo-level `CONTRIBUTING.md` for detailed development setup (Nix/uv), release checklist, and PR guidelines.

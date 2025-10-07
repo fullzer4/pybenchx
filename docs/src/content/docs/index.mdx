@@ -2,12 +2,46 @@
 title: Overview
 ---
 
+## Why pybenchx exists
+
+pybenchx targets the *feedback loop* between writing a microbenchmark and deciding whether a change regressed. It favors:
+
+- **Ridiculously fast iteration** – the default `smoke` profile skips calibration so you can run whole suites in seconds.
+- **Targeted insight** – context mode isolates the hot region you want to measure, so setup noise stays out of your results.
+- **Actionable outputs** – export to JSON/Markdown/CSV/Chart, compare runs in the CLI, and wire into CI gates with `--fail-on`.
+
+> ⏱️ Think of pybenchx as the sharp tool you grab while developing a feature or reviewing a PR. It is *not* meant to replace heavy-duty benchmarking labs or statistically exhaustive suites.
+
+### When to reach for something else
+
+If you need per-microsecond stability, CPU pinning, cross-machine orchestration, or deep statistics, mature frameworks like `pyperf`, `pytest-benchmark`, or dedicated perf harnesses will serve you better. pybenchx intentionally keeps the surface small—no virtualenv spawning, no system-level isolation—so you stay close to your codebase.
+
+### Scope and non-goals
+
+- pybenchx will not focus on multi-process runners, CPU affinity pinning, or auto-tuning calibration loops—bring your own environment if you need them.
+- Memory profiling, flamegraphs, and tracing integrations are out of scope; pybenchx aims at **timing** tight loops.
+- Stability depends on your host; for scientific reproducibility, fall back to more controlled tooling.
+
+### Storage at a glance
+
+Every run is stored under `.pybenchx/` (created beside your project). Inside you will find:
+
+- `runs/` with compressed run artifacts and metadata.
+- `baselines/` with named baselines you created via `--save-baseline`.
+- `exports/` for generated files when you pass `--export`.
+
+Use `pybench list`, `pybench stats`, and `pybench clean --keep N` to inspect, audit, or prune these files. You rarely need to touch the directory manually, but it is safe to remove entirely if you want to reset history.
+
+### For contributors
+
+Start with the [Contributing](./contributing) page—there you will find environment setup tips (uv/Nix), the Ruff and pytest commands we run in CI, and suggestions for good first issues. We love PRs that improve docs, add focused examples, or expand reporters.
+
+---
+
 - Write focused cases quickly (decorator or suite).
 - Default profile is `smoke` (no calibration). Use `thorough` for deeper runs.
-- Clean CLI with discovery, parameterization, and exports.
-- Save runs, compare to baselines, and export JSON/Markdown/CSV.
-
-> ⏱️ pybenchx is a pragmatic microbenchmark tool: fast iteration (smoke profile), precise hot-path timing (context mode), and clear reports you can export and compare.
+- Clean CLI with discovery, parameterization, and exports (JSON/Markdown/CSV/Chart).
+- Save runs, auto-store history under `.pybenchx/`, compare against baselines, and manage storage with built-in commands.
 
 ## Two ways to write a case
 
@@ -32,7 +66,7 @@ def base(b: BenchContext):
 Run it:
 
 ```bash
-pybench examples/
+pybench run examples/
 ```
 
 ## Discovery rules
@@ -56,5 +90,6 @@ pybench examples/
 
 ## Run management
 
-- Runs and baselines are stored under `.pybenchx/` in your project root.
-- Use `--save`/`--save-baseline` to persist, `--compare` with `--fail-on` to enforce thresholds, and `--export` to generate reports.
+- Runs and baselines are stored under `.pybenchx/` in your project root (auto-saved on every run).
+- Use `--save`/`--save-baseline` to persist, `--compare` with `--fail-on` to enforce thresholds, and `--export` to generate reports (JSON, Markdown, CSV, Chart).
+- Inspect history with `pybench list`, view disk usage with `pybench stats`, and clean up with `pybench clean --keep N`.

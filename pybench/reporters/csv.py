@@ -1,4 +1,4 @@
-# Placeholder CSV reporter.
+"""Render benchmark runs as CSV strings."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from ..run_model import Run
 
 
 def render(run: Run) -> str:
+    """Return a CSV representation of ``run`` results."""
     out = StringIO()
     out.write("benchmark,group,mean_ns,p99_ns,baseline\n")
     for r in run.results:

@@ -39,6 +39,7 @@ dependencies = []
 dev = [
   "pytest>=7.4,<8 ; python_version < '3.8'",
   "pytest>=8      ; python_version >= '3.8'",
+  "ruff",
 ]
 
 [project.urls]
@@ -62,3 +63,23 @@ tag_regex = '^[vV]?(?P<version>\d+(?:\.\d+){2,})$'
 version_scheme = "guess-next-dev"
 local_scheme = "node-and-date"
 fallback_version = "0.0.0"
+
+[tool.ruff]
+target-version = "py37"
+line-length = 88
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "UP", "N", "D"]
+ignore = ["D104", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+addopts = "-q -ra"
+testpaths = ["tests"]

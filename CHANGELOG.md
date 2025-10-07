@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.2.0 — architecture refresh & richer docs
+
+### Summary
+This release tightens the ergonomics for day-to-day benchmarking, adds richer run management, and ships a complete documentation overhaul (README, guides, internals, and API reference).
+
+### Highlights
+- CLI quality-of-life:
+  - `pybench run --vs {main,last}` for quick comparisons against saved history.
+  - Storage helpers exposed directly (`pybench list`, `stats`, and `clean --keep N`).
+  - Chart export (`--export chart[:PATH]`) now ships an interactive HTML (Chart.js) bundle.
+- Run store upgrades:
+  - `.pybenchx/` auto-initializes with a human-readable README and structured exports per format.
+  - `run_store` exposes helpers for pruning history, resolving baselines, and computing storage stats.
+- Reporter polish: table, Markdown, CSV, JSON, and chart outputs now share the same speedup/baseline logic, with consistent “≈ same” heuristics.
+
+### Documentation & examples
+- README rewritten to position pybenchx, highlight scope/non-goals, and walk through storage management.
+- Docs refresh:
+  - Overview, Getting Started, CLI, Behavior, Internals, and Examples expanded with workflows, `.pybenchx` explainer, and CI recipes.
+  - New API reference hub with focused pages for decorators/suites, BenchContext & runner, run storage/comparison, and reporters.
+- Examples now cover daily CLI workflows, budget tuning, history management, and automation patterns.
+
+### Developer experience
+- `CONTRIBUTING.md` expanded with branch workflow, lint/test commands, docs preview steps, release checklist, and quality gates.
+- Project tooling documented: `ruff`, `pytest`, Astro docs site (`npm run dev` / `npm run lint`), and nightly regression tips.
+- Release automation clarified: tags (`v*`) trigger CI publish via `hatch-vcs` versioning.
+
+---
+
 ## v1.1.3 — new outputs, and modular refactor
 
 ### Summary

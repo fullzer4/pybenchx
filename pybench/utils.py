@@ -1,18 +1,20 @@
+"""Utility helpers shared across discovery, execution, and reporting."""
+
 from __future__ import annotations
 
 import hashlib
 import os
-from typing import List, Optional, Dict
 
 from .bench_model import Case
-from .runner import calibrate_n as _calibrate_n, detect_used_ctx as _detect_used_ctx
 from .params import make_variants as _make_variants
 from .profiles import DEFAULT_BUDGET_NS
 from .run_model import VariantResult
+from .runner import calibrate_n as _calibrate_n
+from .runner import detect_used_ctx as _detect_used_ctx
 
 
 def _module_name_for_path(path: str) -> str:
-    """Stable unique module name for importing standalone files."""
+    """Return a stable synthetic module name for ``path``."""
     p = os.path.abspath(path)
     h = hashlib.sha1(p.encode("utf-8")).hexdigest()[:12]
     stem = os.path.splitext(os.path.basename(p))[0]
@@ -29,9 +31,8 @@ def parse_ns(s: str) -> int:
     return int(float(s))
 
 
-# Shared formatting helper
-
 def fmt_time_ns(ns: float) -> str:
+    """Format nanoseconds into a human-readable string."""
     if ns != ns:  # NaN
         return "-"
     if ns < 1_000:
@@ -46,9 +47,8 @@ def fmt_time_ns(ns: float) -> str:
     return f"{s:.2f} s"
 
 
-# Percentile with linear interpolation; expects a pre-sorted list
-
-def percentile(sorted_vals: List[float], q: float) -> float:
+def percentile(sorted_vals: list[float], q: float) -> float:
+    """Return the ``q`` percentile from ``sorted_vals`` (0-100)."""
     if not sorted_vals:
         return float("nan")
     n = len(sorted_vals)
@@ -61,18 +61,17 @@ def percentile(sorted_vals: List[float], q: float) -> float:
     return sorted_vals[lo] * (1.0 - frac) + sorted_vals[hi] * frac
 
 
-# Compute speedups vs baseline per group (shared by reporters)
-
-def compute_speedups(results: List[VariantResult]) -> Dict[int, float]:
-    by_group: Dict[str, List[VariantResult]] = {}
+def compute_speedups(results: list[VariantResult]) -> dict[int, float]:
+    """Compute per-variant speedups relative to detected baselines."""
+    by_group: dict[str, list[VariantResult]] = {}
     for r in results:
         if r.group == "-":
             continue
         by_group.setdefault(r.group, []).append(r)
 
-    speedups: Dict[int, float] = {}
+    speedups: dict[int, float] = {}
     for _, items in by_group.items():
-        base_r: Optional[VariantResult] = next((r for r in items if r.baseline), None)
+        base_r: VariantResult | None = next((r for r in items if r.baseline), None)
         if base_r is None:
             for r in items:
                 nl = r.name.lower()
@@ -91,31 +90,38 @@ def compute_speedups(results: List[VariantResult]) -> Dict[int, float]:
                 if pct_diff <= 0.01:
                     speedups[id(r)] = 1.0
                     continue
-            speedups[id(r)] = (base_mean / r.stats.mean) if (r.stats.mean and base_mean) else float("nan")
+            speedups[id(r)] = (
+                (base_mean / r.stats.mean)
+                if (r.stats.mean and base_mean)
+                else float("nan")
+            )
     return speedups
 
 
-def prepare_variants(case: Case, *, budget_ns: Optional[int], max_n: int, smoke: bool):
-    """
-    Prepare (vname, vargs, vkwargs, used_ctx, local_n) for each variant.
+def prepare_variants(
+    case: Case,
+    *,
+    budget_ns: int | None,
+    max_n: int,
+    smoke: bool,
+):
+    """Prepare (vname, vargs, vkwargs, used_ctx, local_n) for each variant.
 
     - used_ctx is computed only for context mode
     - local_n is calibrated per-variant unless smoke=True
-    
+
     Fast-path optimization: skip context detection and calibration for simple cases.
     """
     variants = _make_variants(case)
     prepared = []
-    
-    # Fast-path: simple case without params in smoke mode
+
     is_simple = smoke and not case.params and case.mode == "func"
-    
+
     for vname, vargs, vkwargs in variants:
         if is_simple:
-            # Fast-path: no detection, no calibration
             prepared.append((vname, vargs, vkwargs, False, case.n))
             continue
-            
+
         if case.mode == "context":
             try:
                 used_ctx = _detect_used_ctx(case.func, vargs, vkwargs)
@@ -127,9 +133,7 @@ def prepare_variants(case: Case, *, budget_ns: Optional[int], max_n: int, smoke:
         if smoke:
             local_n = case.n
         else:
-            # Direct calibration without caching
             target_total = budget_ns if budget_ns is not None else DEFAULT_BUDGET_NS
-            # budget per repeat to split across repeats
             target = max(1_000_000, int(target_total) // max(1, case.repeat))
             try:
                 calib_n, calib_used_ctx = _calibrate_n(

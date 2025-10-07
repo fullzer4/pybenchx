@@ -1,28 +1,32 @@
-# Placeholder for compare/diff logic including Mann–Whitney U tests.
+"""Stateless helpers for comparing two benchmark runs.
+
+Implements Mann–Whitney U significance testing and a thin domain model for
+reporting structured comparison results, plus helpers for policy-driven
+threshold evaluation.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 try:
     from math import comb  # py3.8+
-except Exception:  # pragma: no cover
-    comb = None  # type: ignore
+except Exception:
+    comb = None
 
 from .run_model import Run
 
 
 @dataclass
 class VariantDiff:
+    """Per-variant comparison metrics between a baseline and current run."""
     name: str
     group: str
     base_mean: float
     curr_mean: float
-    delta_pct: float  # positive = regression (slower)
-    p_value: Optional[float]
+    delta_pct: float
+    p_value: float | None
     status: str  # "better" | "same" | "worse"
-    # Additional metrics
     base_p99: float = float("nan")
     curr_p99: float = float("nan")
     delta_p99_pct: float = float("nan")
@@ -30,11 +34,12 @@ class VariantDiff:
 
 @dataclass
 class DiffReport:
+    """Aggregate comparison result for an entire suite."""
     suite_changed: bool
-    compared: List[VariantDiff]
+    compared: list[VariantDiff]
 
 
-def _mann_whitney_u(x: List[float], y: List[float]) -> Optional[float]:
+def _mann_whitney_u(x: list[float], y: list[float]) -> float | None:
     # Very small n fallback: return None to signal low power / skip
     n1, n2 = len(x), len(y)
     if n1 < 2 or n2 < 2:
@@ -67,14 +72,24 @@ def _mann_whitney_u(x: List[float], y: List[float]) -> Optional[float]:
     return p
 
 
-def _index_results(run: Run) -> Dict[Tuple[str, str], object]:
-    idx: Dict[Tuple[str, str], object] = {}
+def _index_results(run: Run) -> dict[tuple[str, str], object]:
+    idx: dict[tuple[str, str], object] = {}
     for r in run.results:
         idx[(r.group, r.name)] = r
     return idx
 
 
 def diff(current: Run, baseline: Run, alpha: float = 0.05) -> DiffReport:
+    """Compare two runs and compute distribution deltas.
+
+    Args:
+        current: Run produced by the latest benchmark execution.
+        baseline: Run to compare against.
+        alpha: Significance threshold for the Mann–Whitney test.
+
+    Returns:
+        DiffReport describing per-variant changes and suite shape differences.
+    """
     base_idx = _index_results(baseline)
     curr_idx = _index_results(current)
 
@@ -83,21 +98,23 @@ def diff(current: Run, baseline: Run, alpha: float = 0.05) -> DiffReport:
         current.suite_signature != baseline.suite_signature
     )
 
-    compared: List[VariantDiff] = []
+    compared: list[VariantDiff] = []
     for key in keys:
         b = base_idx[key]
         c = curr_idx[key]
         base_mean = b.stats.mean
         curr_mean = c.stats.mean
-        delta_pct = ((curr_mean - base_mean) / base_mean * 100.0) if base_mean > 0 else 0.0
-        # p99 deltas
+        delta_pct = (
+            (curr_mean - base_mean) / base_mean * 100.0
+        ) if base_mean > 0 else 0.0
+
         base_p99 = getattr(b.stats, "p99", float("nan"))
         curr_p99 = getattr(c.stats, "p99", float("nan"))
         if base_p99 and base_p99 == base_p99 and base_p99 > 0 and curr_p99 == curr_p99:
             delta_p99_pct = ((curr_p99 - base_p99) / base_p99 * 100.0)
         else:
             delta_p99_pct = float("nan")
-        # Use samples if available, else approximate with repeated mean values
+
         xs = b.samples_ns if b.samples_ns else [b.stats.mean] * b.repeat
         ys = c.samples_ns if c.samples_ns else [c.stats.mean] * c.repeat
         p = _mann_whitney_u(xs, ys)
@@ -124,8 +141,9 @@ def diff(current: Run, baseline: Run, alpha: float = 0.05) -> DiffReport:
     return DiffReport(suite_changed=suite_changed, compared=compared)
 
 
-def parse_fail_policy(policy: str) -> Dict[str, float]:
-    out: Dict[str, float] = {}
+def parse_fail_policy(policy: str) -> dict[str, float]:
+    """Parse ``metric:percent`` strings into a numeric policy mapping."""
+    out: dict[str, float] = {}
     if not policy:
         return out
     parts = [p.strip() for p in policy.split(",") if p.strip()]
@@ -142,18 +160,27 @@ def parse_fail_policy(policy: str) -> Dict[str, float]:
     return out
 
 
-def violates_policy(report: DiffReport, policy: Dict[str, float], alpha: float = 0.05) -> bool:
+def violates_policy(
+    report: DiffReport,
+    policy: dict[str, float],
+    alpha: float = 0.05,
+) -> bool:
+    """Return True when the diff violates the given policy thresholds."""
     if not policy and not report.suite_changed:
         return False
     for d in report.compared:
-        # Check p-value first: if significant and regression exceeds any metric threshold
+        # Check p-value first: only treat significant regressions as violations
         significant = (d.p_value is not None and d.p_value < alpha)
         if d.status == "worse" and significant:
-            # mean policy
+
             if policy.get("mean") is not None and d.delta_pct > policy["mean"]:
                 return True
-            # p99 policy
-            if policy.get("p99") is not None and (d.delta_p99_pct == d.delta_p99_pct) and d.delta_p99_pct > policy["p99"]:
+
+            if (
+                policy.get("p99") is not None
+                and (d.delta_p99_pct == d.delta_p99_pct)
+                and d.delta_p99_pct > policy["p99"]
+            ):
                 return True
     return False
 

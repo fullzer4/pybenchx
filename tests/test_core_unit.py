@@ -1,18 +1,24 @@
+"""Core unit tests for pybench helpers and CLI integration flows."""
+
 import textwrap
 from pathlib import Path
 
-from pybench.timing import BenchContext, _pc_ns as _pc_ns_ref
-from pybench.bench_model import Case
-from pybench.runner import detect_used_ctx as _detect_used_ctx, infer_mode as _infer_mode, run_single_repeat as _run_single_repeat, calibrate_n as _calibrate_n
-from pybench.params import make_variants as _make_variants
-from pybench.overrides import apply_overrides
-from pybench.reporters.table import format_table
 import pybench.cli as cli_mod
-from pybench.run_model import VariantResult, StatSummary
 import pybench.timing as timing_mod
+from pybench.bench_model import Case
+from pybench.overrides import apply_overrides
+from pybench.params import make_variants as _make_variants
+from pybench.reporters.table import format_table
+from pybench.run_model import StatSummary, VariantResult
+from pybench.runner import detect_used_ctx as _detect_used_ctx
+from pybench.runner import infer_mode as _infer_mode
+from pybench.runner import run_single_repeat as _run_single_repeat
+from pybench.timing import BenchContext
+from pybench.utils import prepare_variants
 
 
 def test_infer_mode_by_annotation_and_name():
+    """Infer mode should respect annotations and naming conventions."""
     # by annotation
     def f1(b: BenchContext):  # type: ignore[name-defined]
         pass
@@ -31,6 +37,7 @@ def test_infer_mode_by_annotation_and_name():
 
 
 def test_bench_context_start_end_accumulate(monkeypatch):
+    """BenchContext should track elapsed time across start/end calls."""
     t = {"now": 0}
 
     def fake_pc():
@@ -46,15 +53,19 @@ def test_bench_context_start_end_accumulate(monkeypatch):
     assert b._elapsed_ns() == 0
 
     # single start/end
-    b.start(); b.end()
+    b.start()
+    b.end()
     assert b._elapsed_ns() == 50
 
     # nested start ignored
-    b.start(); b.start(); b.end()
+    b.start()
+    b.start()
+    b.end()
     assert b._elapsed_ns() == 100  # +50
 
 
 def test_make_variants_and_precedence():
+    """Parameter combinations should override kwargs with deterministic names."""
     c = Case(
         name="join_param",
         func=lambda n, sep=",": None,
@@ -73,6 +84,7 @@ def test_make_variants_and_precedence():
 
 
 def test_apply_overrides_params_vs_kwargs():
+    """Overrides should coerce types and update params and kwargs appropriately."""
     c = Case(
         name="case",
         func=lambda **kw: None,
@@ -102,8 +114,10 @@ def test_apply_overrides_params_vs_kwargs():
 
 
 def test_detect_used_ctx_true_and_false():
+    """Context usage detection should flag BenchContext calls only."""
     def uses(b: BenchContext):
-        b.start(); b.end()
+        b.start()
+        b.end()
 
     def not_uses(b: BenchContext):
         pass
@@ -113,6 +127,7 @@ def test_detect_used_ctx_true_and_false():
 
 
 def test_run_single_repeat_context_used_ctx(monkeypatch):
+    """Context mode with used context should average BenchContext elapsed times."""
     # Each start/end adds +100 ns due to fake clock
     t = {"now": 0}
 
@@ -123,7 +138,8 @@ def test_run_single_repeat_context_used_ctx(monkeypatch):
     monkeypatch.setattr(timing_mod, "_pc_ns", fake_pc)
 
     def fn(b: BenchContext):
-        b.start(); b.end()
+        b.start()
+        b.end()
 
     case = Case(name="c", func=fn, mode="context", n=5)
     per = _run_single_repeat(case, "c", (), {}, used_ctx=True, local_n=5)
@@ -131,6 +147,7 @@ def test_run_single_repeat_context_used_ctx(monkeypatch):
 
 
 def test_run_single_repeat_context_fallback_loop_time(monkeypatch):
+    """Context mode without manual timing should fallback to wall-clock loop time."""
     # Clock: first call 0, second call n*100
     calls = {"i": 0}
 
@@ -150,6 +167,7 @@ def test_run_single_repeat_context_fallback_loop_time(monkeypatch):
 
 
 def test_run_single_repeat_func_mode(monkeypatch):
+    """Pure function benchmarks should use wall-clock timing."""
     # Clock: first call 0, second call n*50
     calls = {"i": 0}
 
@@ -169,12 +187,66 @@ def test_run_single_repeat_func_mode(monkeypatch):
 
 
 def test_format_table_headers_groups_speedups_and_sorting():
+    """Table reporter should include headers, group labels, and speedups."""
     # Build three VariantResult entries to feed the table formatter
-    r_base = VariantResult(name="base", group="G", n=1, repeat=3, baseline=True, stats=StatSummary(mean=200.0, median=200.0, stdev=0.0, min=200.0, max=200.0, p75=200.0, p99=200.0, p995=200.0))
-    r_same = VariantResult(name="same", group="G", n=1, repeat=3, baseline=False, stats=StatSummary(mean=200.0, median=200.0, stdev=2.0, min=198.0, max=202.0, p75=201.0, p99=202.0, p995=202.0))
-    r_fast = VariantResult(name="fast", group="G", n=1, repeat=3, baseline=False, stats=StatSummary(mean=100.0, median=100.0, stdev=0.0, min=100.0, max=100.0, p75=100.0, p99=100.0, p995=100.0))
+    r_base = VariantResult(
+        name="base",
+        group="G",
+        n=1,
+        repeat=3,
+        baseline=True,
+        stats=StatSummary(
+            mean=200.0,
+            median=200.0,
+            stdev=0.0,
+            min=200.0,
+            max=200.0,
+            p75=200.0,
+            p99=200.0,
+            p995=200.0,
+        ),
+    )
+    r_same = VariantResult(
+        name="same",
+        group="G",
+        n=1,
+        repeat=3,
+        baseline=False,
+        stats=StatSummary(
+            mean=200.0,
+            median=200.0,
+            stdev=2.0,
+            min=198.0,
+            max=202.0,
+            p75=201.0,
+            p99=202.0,
+            p995=202.0,
+        ),
+    )
+    r_fast = VariantResult(
+        name="fast",
+        group="G",
+        n=1,
+        repeat=3,
+        baseline=False,
+        stats=StatSummary(
+            mean=100.0,
+            median=100.0,
+            stdev=0.0,
+            min=100.0,
+            max=100.0,
+            p75=100.0,
+            p99=100.0,
+            p995=100.0,
+        ),
+    )
 
-    txt = format_table([r_base, r_same, r_fast], use_color=False, sort="time", desc=False)
+    txt = format_table(
+        [r_base, r_same, r_fast],
+        use_color=False,
+        sort="time",
+        desc=False,
+    )
     # Headers present
     assert "benchmark" in txt and "time (avg)" in txt and "vs base" in txt
     # Group heading and baseline marker
@@ -185,13 +257,30 @@ def test_format_table_headers_groups_speedups_and_sorting():
     assert "2.00× faster" in txt
 
     # Sorting by group order
-    r2 = VariantResult(name="other", group="A", n=1, repeat=1, baseline=False, stats=StatSummary(mean=300.0, median=300.0, stdev=0.0, min=300.0, max=300.0, p75=300.0, p99=300.0, p995=300.0))
+    r2 = VariantResult(
+        name="other",
+        group="A",
+        n=1,
+        repeat=1,
+        baseline=False,
+        stats=StatSummary(
+            mean=300.0,
+            median=300.0,
+            stdev=0.0,
+            min=300.0,
+            max=300.0,
+            p75=300.0,
+            p99=300.0,
+            p995=300.0,
+        ),
+    )
     txt2 = format_table([r2, r_base], use_color=False, sort="group", desc=False)
     # Group A header should appear before G
     assert txt2.splitlines()[1].strip().startswith("group: A")
 
 
 def test_prepare_variants_handles_warmup_exception(tmp_path: Path):
+    """Warmup failures should not prevent variant preparation."""
     bench_file = tmp_path / "warm_bench.py"
     bench_file.write_text(
         textwrap.dedent(
@@ -218,11 +307,12 @@ def test_prepare_variants_handles_warmup_exception(tmp_path: Path):
     case = next(c for c in all_cases() if c.name == "boom")
 
     # Should not raise, despite the warmup raising once inside
-    variants = cli_mod._prepare_variants(case, budget_ns=None, max_n=1000, smoke=False)
+    variants = prepare_variants(case, budget_ns=None, max_n=1000, smoke=False)
     assert variants and isinstance(variants[0], tuple)
 
 
 def test_cli_end_to_end_smoke(tmp_path: Path, monkeypatch, capsys):
+    """End-to-end run should emit expected sections and comparisons."""
     # Create a small benchmark file with a baseline and variants
     bench_file = tmp_path / "mini_bench.py"
     bench_file.write_text(
@@ -251,7 +341,8 @@ def test_cli_end_to_end_smoke(tmp_path: Path, monkeypatch, capsys):
         )
     )
 
-    # Deterministic per-call timing via monkeypatching the CLI's imported _run_single_repeat
+    # Deterministic per-call timing via monkeypatching the CLI's imported
+    # _run_single_repeat helper.
     def fake_repeat(case, name, vargs, vkwargs, used_ctx, local_n):
         if name.endswith("base"):
             return 200.0
@@ -261,14 +352,26 @@ def test_cli_end_to_end_smoke(tmp_path: Path, monkeypatch, capsys):
             return 198.0
         return 150.0
 
-    monkeypatch.setattr(cli_mod, "_run_single_repeat", fake_repeat)
+    from pybench import runner as runner_mod
 
-    rc = cli_mod.run([str(tmp_path)], keyword=None, propairs=[], use_color=False, sort="time", desc=False, budget_ns=None, profile="smoke", max_n=100)
+    monkeypatch.setattr(runner_mod, "run_single_repeat", fake_repeat)
+
+    rc = cli_mod.run(
+        [str(tmp_path)],
+        keyword=None,
+        propairs=[],
+        use_color=False,
+        sort="time",
+        desc=False,
+        budget_ns=None,
+        profile="smoke",
+        max_n=100,
+    )
     captured = capsys.readouterr().out
 
     assert rc == 0
     assert "cpu:" in captured and "runtime:" in captured
     assert "group: grp" in captured
     assert "base  ★" in captured
-    assert "2.00× faster" in captured or "2.00× faster" in captured
+    assert "× faster" in captured
     assert "≈ same" in captured

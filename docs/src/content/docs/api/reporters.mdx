@@ -1,0 +1,102 @@
+---
+title: Reporters & Exports
+---
+
+Reporters transform a `Run` into human-friendly output. The CLI wires them up via `--export`, but you can call them directly from Python.
+
+## Console table (`pybench.reporters.table`)
+
+```python
+from pybench.reporters.table import format_table
+
+print(format_table(run.results, use_color=True, sort=None, brief=False))
+```
+
+- Accepts a list of `VariantResult` objects and returns a string ready for the terminal.
+- Supports color toggles, `--brief` mode, and sorting options (`group`, `time`).
+- Used internally for the default CLI output.
+
+Tip: Pair with `print(format_table(...))` if you want to embed pybenchx inside other CLIs.
+
+## Markdown / CSV / JSON
+
+| Module | Function | Notes |
+| --- | --- | --- |
+| `pybench.reporters.markdown` | `render(run, include_pvalues=False)` | GitHub-ready table with baseline annotations. |
+| `pybench.reporters.csv` | `render(run)` | Light-weight CSV header for spreadsheets or data ingestion. |
+| `pybench.reporters.json` | `render(run)` / `write(run, path)` | Structured JSON (identical shape to `.pybenchx` artifacts). |
+
+Example:
+
+```python
+from pathlib import Path
+from pybench.reporters.markdown import render as render_md
+from pybench.reporters.json import write as write_json
+from pybench.run_store import default_export_path
+
+md = render_md(run)
+Path("bench.md").write_text(md, encoding="utf-8")
+
+json_path = default_export_path(run, "json", base_name="nightly")
+write_json(run, json_path)
+```
+
+## Chart exports (`pybench.reporters.charts`)
+
+```python
+from pybench.reporters.charts import render_run_chart
+from pybench.run_store import default_export_path
+
+html = render_run_chart(run, title="Nightly perf", unit="auto")
+path = default_export_path(run, "chart", base_name="nightly")
+path.write_text(html, encoding="utf-8")
+```
+
+The generated HTML bundle boots Chart.js from a CDN and renders a grouped bar chart. Baselines are highlighted. You can tweak units (`ns`, `µs`, `ms`, `s`) or supply a custom page title.
+
+## Comparison output (`pybench.reporters.diff`)
+
+```python
+from pybench.reporters.diff import format_comparison
+from pybench.run_store import load_baseline
+
+baseline_name, baseline = load_baseline("main")
+text, exit_code = format_comparison(run, baseline, baseline_name, use_color=True, fail_on="mean:5%,p99:10%")
+print(text)
+```
+
+- Formats the same comparison summary you see from `pybench --compare`.
+- Returns both the formatted string and an exit code (`0` success, `2` thresholds violated).
+- Under the hood it relies on `pybench.compare.diff/parse_fail_policy/violates_policy`.
+
+## Implementing a custom reporter
+
+Reporters are regular Python modules; there is no framework you must subclass. A convenient pattern is to expose a `render(run, **kwargs)` function and defer writing to the caller. For example:
+
+```python
+from pathlib import Path
+from pybench.run_model import Run
+
+def render_rst(run: Run) -> str:
+    lines = ["Benchmark | Mean (ms)", "----------------------"]
+    for r in run.results:
+        lines.append(f"{r.group}/{r.name} | {r.stats.mean / 1e6:.3f}")
+    return "\n".join(lines)
+
+def write_rst(run: Run, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_rst(run), encoding="utf-8")
+```
+
+Export the helper from your module and wire it into your automation or forked CLI. If you want the reporter to show up in `pybench --export`, open an issue or PR so we can discuss adding it upstream.
+
+## Reporter selection logic
+
+When the CLI sees `--export csv:out.csv`, it:
+
+1. Parses the spec into `(format, destination)`.
+2. Resolves a default path with `default_export_path` when no destination is provided.
+3. Calls the matching reporter module (e.g., `pybench.reporters.csv.render`).
+4. Writes the result to disk using UTF-8.
+
+Understanding this flow makes it easy to bolt on additional artifacts in your own scripts.
